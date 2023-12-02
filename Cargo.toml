@@ -1,8 +1,12 @@
 [package]
 name = "can-cpp-codegen-rs"
 version = "0.1.0"
-edition = "2023"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+can-config-rs = { git = "https://github.com/mu-zero-HYPERLOOP/can-config-rs.git" }
+can-yaml-config-rs = { git = "https://github.com/mu-zero-HYPERLOOP/can-yaml-config-rs.git" }
+
+[dev.dependencies]
