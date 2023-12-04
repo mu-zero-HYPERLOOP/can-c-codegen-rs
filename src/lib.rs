@@ -4,7 +4,7 @@ use options::Options;
 use types::generate_types;
 use errors::{Error, Result};
 
-use crate::{object_entries::generate_object_entries, messages::generate_messages};
+use crate::{object_entries::generate_object_entries, messages::generate_messages, poll::generate_poll, rx_queue::generate_rx_queue};
 
 pub mod errors;
 pub mod options;
@@ -13,6 +13,8 @@ mod source_block;
 mod types;
 mod object_entries;
 mod messages;
+mod rx_queue;
+mod poll;
 
 
 pub fn generate(node_name : &str, network_config : config::NetworkRef, options : Options) -> Result<()> {
@@ -26,6 +28,8 @@ pub fn generate(node_name : &str, network_config : config::NetworkRef, options :
     generate_types(node_config, &mut header, &options)?;
     generate_object_entries(node_config.object_entries(), &mut header, &mut src, &options)?;
     generate_messages(node_config.tx_messages(), node_config.rx_messages(), &mut header, &mut src, &options)?;
+    generate_rx_queue(&mut header, &mut src, &options)?;
+    generate_poll(node_config, &mut header, &mut src, &options)?;
 
 
     println!("HEADER:");
