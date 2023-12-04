@@ -91,7 +91,7 @@ pub fn generate_messages(
                         match attrib {
                             TypeSignalEncoding::Composite(composite) => {
                                 let attrib_name = composite.name();
-                                let attrib_prefix = format!("{attribute_prefix}{attrib_name}");
+                                let attrib_prefix = format!("{attribute_prefix}{attrib_name}.");
                                 for attrib in composite.attributes() {
                                     write_attribute_parse_code(serialized_def, attrib, indent, &attrib_prefix);
                                 }
@@ -109,11 +109,15 @@ pub fn generate_messages(
                                                 format!("{attribute_prefix}{attrib_name}")
                                             }
                                             SignalType::Decimal {
-                                                size: _,
+                                                size,
                                                 offset,
                                                 scale,
                                             } => {
-                                                format!("({attribute_prefix}{attrib_name} * {scale} + {offset})")
+                                                if *size <= 32 {
+                                                    format!("(uint32_t)({attribute_prefix}{attrib_name} * {scale} + {offset})")
+                                                }else {
+                                                    format!("(uint64_t)({attribute_prefix}{attrib_name} * {scale} + {offset})")
+                                                }
                                             }
                                         };
                                         let bit_write_code = bit_write_code(
@@ -122,7 +126,6 @@ pub fn generate_messages(
                                             "data",
                                             &var,
                                         );
-
                                         serialized_def
                                             .push_str(&format!("{indent}{bit_write_code};\n"));
                                     }
@@ -145,7 +148,6 @@ pub fn generate_messages(
                                             "data",
                                             &format!("({attribute_prefix}{attrib_name})"),
                                         );
-
                                         serialized_def
                                             .push_str(&format!("{indent}{bit_write_code};\n"));
                                     }
@@ -179,7 +181,8 @@ pub fn generate_messages(
                                 offset,
                                 scale,
                             } => {
-                                format!("(msg->{signal_name} * {scale} + {offset})")
+                                let inv_scale = 1.0 / *scale;
+                                format!("(msg->{signal_name} * {inv_scale} + {offset})")
                             }
                         };
                         let bit_write_code = bit_write_code(

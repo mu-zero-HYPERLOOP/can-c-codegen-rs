@@ -29,7 +29,17 @@ pub fn generate_types(
                 let mut dependencies = vec![];
                 for (attrib_name, attrib_type) in attribs {
                     let attrib_type_name = attrib_type.name();
-                    def.push_str(&format!("{indent}{attrib_type_name} {attrib_name};\n"));
+                    let (ctype, deps) = to_c_type_name(attrib_type);
+                    def.push_str(&format!("{indent}{ctype} {attrib_name};\n"));
+                    
+                    match deps {
+                        Some(dep) => {
+                            if !dependencies.contains(&dep) {
+                                dependencies.push(dep);
+                            }
+                        }
+                        None => (),
+                    }
 
                     let dep = SourceBlockIdentifier::Declartion(attrib_type_name);
                     if !dependencies.contains(&dep) {
@@ -52,7 +62,7 @@ pub fn generate_types(
             } => {
                 let mut def = format!("typedef enum {{\n");
                 for (entry_name, entry_value) in entries {
-                    def.push_str(&format!("{indent}{entry_name} = {entry_value}\n"));
+                    def.push_str(&format!("{indent}{name}_{entry_name} = {entry_value},\n"));
                 }
                 def.push_str(&format!("}} {name};\n"));
                 header.add_block(SourceBlock::new(

@@ -1,13 +1,13 @@
 
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SourceBlockIdentifier {
     Import(String),
     Declartion(String),
     Definition(String),
 }
 
-// immutable container for a piece of code, with dependencies!
+#[derive(Clone)]
 pub struct SourceBlock {
     id : SourceBlockIdentifier,
     content : String,
