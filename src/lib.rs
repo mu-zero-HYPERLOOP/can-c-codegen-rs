@@ -38,12 +38,12 @@ pub fn generate(node_name : &str, network_config : config::NetworkRef, options :
 
     src.include_file_buffer(&header);
 
-    header.write().unwrap();
-    src.write().unwrap();
-    println!("HEADER:");
-    println!("{header:?}");
-    println!("SOURCE:");
-    println!("{src:?}");
+    header.write(Some("CANZERO_H".to_owned())).unwrap();
+    src.write(None).unwrap();
+    // println!("HEADER:");
+    // println!("{header:?}");
+    // println!("SOURCE:");
+    // println!("{src:?}");
 
     Ok(())
 }

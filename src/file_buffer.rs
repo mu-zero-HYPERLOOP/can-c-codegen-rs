@@ -49,7 +49,7 @@ impl FileBuffer {
         self.includes.borrow_mut().push(buffer.clone());
     }
 
-    pub fn write(&self) -> Result<()> {
+    pub fn write(&self, header_guard : Option<String>) -> Result<()> {
         let mut content = String::new();
         let mut defined_blocks = HashSet::new();
         fn collect_defined_blocks(defined_blocks : &mut HashSet<SourceBlockIdentifier>, include : &FileBuffer, included_files : &mut Vec<String>) {
@@ -79,6 +79,17 @@ impl FileBuffer {
                 }
             }
         }
+        let header_guard = if header_guard.is_some() {
+            let guard = header_guard.unwrap();
+            content += &format!(
+"#ifndef {}
+#define {}
+#ifdef __cplusplus
+extern \"C\" {{
+#endif\n", guard, guard);
+            true
+        }else {false};
+
         for inc in includes {
             content.push_str(&format!("#include \"{}\"\n", inc));
         }
@@ -93,7 +104,16 @@ impl FileBuffer {
         for block in self.blocks.borrow().iter() {
             content.push_str(block.content());
         }
-    
+
+        if header_guard {
+            content += &format!(
+"
+#ifdef __cplusplus 
+}}
+#endif
+#endif
+");
+        }
         
         std::fs::write(&self.path, &content)?;
         Ok(())
