@@ -1,0 +1,20 @@
+[
+{
+  "directory": "/home/karlsassie/Documents/can-cpp-codegen-rs/testing/build",
+  "command": "/usr/bin/c++  -I/home/karlsassie/Documents/can-cpp-codegen-rs/testing/build/canzero -I/home/karlsassie/Documents/can-cpp-codegen-rs/testing/mock_can/src  -o CMakeFiles/test1.dir/src/main.cpp.o -c /home/karlsassie/Documents/can-cpp-codegen-rs/testing/src/main.cpp",
+  "file": "/home/karlsassie/Documents/can-cpp-codegen-rs/testing/src/main.cpp",
+  "output": "CMakeFiles/test1.dir/src/main.cpp.o"
+},
+{
+  "directory": "/home/karlsassie/Documents/can-cpp-codegen-rs/testing/build",
+  "command": "/usr/bin/cc  -I/home/karlsassie/Documents/can-cpp-codegen-rs/testing/build/canzero -I/home/karlsassie/Documents/can-cpp-codegen-rs/testing/mock_can/src  -o CMakeFiles/test1.dir/canzero/canzero.c.o -c /home/karlsassie/Documents/can-cpp-codegen-rs/testing/build/canzero/canzero.c",
+  "file": "/home/karlsassie/Documents/can-cpp-codegen-rs/testing/build/canzero/canzero.c",
+  "output": "CMakeFiles/test1.dir/canzero/canzero.c.o"
+},
+{
+  "directory": "/home/karlsassie/Documents/can-cpp-codegen-rs/testing/build/mock_can",
+  "command": "/usr/bin/cc  -I/home/karlsassie/Documents/can-cpp-codegen-rs/testing/mock_can/src  -o CMakeFiles/mock_can.dir/src/can_adapter.c.o -c /home/karlsassie/Documents/can-cpp-codegen-rs/testing/mock_can/src/can_adapter.c",
+  "file": "/home/karlsassie/Documents/can-cpp-codegen-rs/testing/mock_can/src/can_adapter.c",
+  "output": "mock_can/CMakeFiles/mock_can.dir/src/can_adapter.c.o"
+}
+]

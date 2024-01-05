@@ -1,0 +1,2 @@
+/usr/bin/ar qc libmock_can.a CMakeFiles/mock_can.dir/src/can_adapter.c.o
+/usr/bin/ranlib libmock_can.a
