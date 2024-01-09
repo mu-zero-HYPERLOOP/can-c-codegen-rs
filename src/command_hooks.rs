@@ -1,15 +1,13 @@
 use crate::{
     errors::Result,
-    file_buffer::FileBuffer,
     options::Options,
-    source_block::{SourceBlock, SourceBlockIdentifier},
 };
 use can_config_rs::config::{self, Type};
 
 pub fn generate_command_hooks(
     commands: &Vec<config::CommandRef>,
-    source: &mut FileBuffer,
-    header: &mut FileBuffer,
+    source: &mut String,
+    header: &mut String,
     options: &Options,
 ) -> Result<()> {
     let namespace = options.namespace();
@@ -78,17 +76,8 @@ pub fn generate_command_hooks(
         }
 
         let hook_name = format!("{namespace}_{command_name}");
-        let weak_hook_def = format!(
-            "__attribute__((weak)) command_resp_erno {hook_name}({attribute_list}) {{
-{indent}// OVERWRITE ME IN A DIFFERENT COMPILATION UNIT
-{indent} return command_resp_erno_Error;
-}}\n"
-        );
-        source.add_block(SourceBlock::new(
-            SourceBlockIdentifier::Definition(hook_name.clone()),
-            weak_hook_def,
-            vec![], // <-- not totally true =^)
-        ))?;
+        let weak_hook_decl = format!("extern command_resp_erno {hook_name}({attribute_list});\n");
+        header.push_str(&weak_hook_decl);
     }
 
     Ok(())

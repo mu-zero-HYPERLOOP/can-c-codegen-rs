@@ -1,13 +1,12 @@
-use can_config_rs::config::{self, Type, TypeRef};
+use can_config_rs::config::{self, Type};
 
 use crate::errors::Result;
 use crate::messages::signal_type_to_c_type;
-use crate::source_block::{SourceBlock, SourceBlockIdentifier};
-use crate::{file_buffer::FileBuffer, options::Options};
+use crate::options::Options;
 
 pub fn generate_types(
     node_config: &config::NodeRef,
-    header: &mut FileBuffer,
+    header: &mut String,
     options: &Options,
 ) -> Result<()> {
     let mut indent = String::new();
@@ -15,8 +14,6 @@ pub fn generate_types(
         indent.push(' ');
     }
 
-    // in theory they should already be sorted topological, but we should still add proper
-    // dependencies!
     for ty in node_config.types() {
         match ty as &config::Type {
             config::Type::Struct {
@@ -26,32 +23,13 @@ pub fn generate_types(
                 visibility: _,
             } => {
                 let mut def = format!("typedef struct {{\n");
-                let mut dependencies = vec![];
                 for (attrib_name, attrib_type) in attribs {
                     let attrib_type_name = attrib_type.name();
-                    let (ctype, deps) = to_c_type_name(attrib_type);
+                    let ctype = to_c_type_name(attrib_type);
                     def.push_str(&format!("{indent}{ctype} {attrib_name};\n"));
-                    
-                    match deps {
-                        Some(dep) => {
-                            if !dependencies.contains(&dep) {
-                                dependencies.push(dep);
-                            }
-                        }
-                        None => (),
-                    }
-
-                    let dep = SourceBlockIdentifier::Declartion(attrib_type_name);
-                    if !dependencies.contains(&dep) {
-                        dependencies.push(dep);
-                    }
                 }
                 def.push_str(&format!("}} {name};\n"));
-                header.add_block(SourceBlock::new(
-                    SourceBlockIdentifier::Declartion(name.clone()),
-                    def,
-                    dependencies,
-                ))?;
+                header.push_str(&def);
             }
             config::Type::Enum {
                 name,
@@ -65,11 +43,7 @@ pub fn generate_types(
                     def.push_str(&format!("{indent}{name}_{entry_name} = {entry_value},\n"));
                 }
                 def.push_str(&format!("}} {name};\n"));
-                header.add_block(SourceBlock::new(
-                    SourceBlockIdentifier::Declartion(name.clone()),
-                    def,
-                    vec![],
-                ))?;
+                header.push_str(&def);
             }
             config::Type::Array { len: _, ty: _ } => todo!(),
             config::Type::Primitive(_) => {
@@ -80,7 +54,7 @@ pub fn generate_types(
     Ok(())
 }
 
-pub fn to_c_type_name(ty: &Type) -> (&str, Option<SourceBlockIdentifier>) {
+pub fn to_c_type_name(ty: &Type) -> &str {
     match ty {
         config::Type::Primitive(signal_type) => signal_type_to_c_type(signal_type),
         config::Type::Struct {
@@ -88,14 +62,14 @@ pub fn to_c_type_name(ty: &Type) -> (&str, Option<SourceBlockIdentifier>) {
             description: _,
             attribs: _,
             visibility: _,
-        } => (name, Some(SourceBlockIdentifier::Definition(name.clone()))),
+        } => name,
         config::Type::Enum {
             name,
             description: _,
             size: _,
             entries: _,
             visibility: _,
-        } => (name, Some(SourceBlockIdentifier::Definition(name.clone()))),
+        } => name,
         config::Type::Array { len: _, ty: _ } => todo!(),
     }
 }

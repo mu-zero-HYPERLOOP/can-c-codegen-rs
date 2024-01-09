@@ -1,16 +1,14 @@
-use can_config_rs::config::encoding::PrimitiveSignalEncoding;
 use can_config_rs::config::{self, MessageRef, SignalType, Type, TypeSignalEncoding};
 
 use crate::errors::Result;
-use crate::source_block::{SourceBlock, SourceBlockIdentifier};
 use crate::types::to_c_type_name;
-use crate::{file_buffer::FileBuffer, options::Options};
+use crate::options::Options;
 
 pub fn generate_messages(
     tx_messages: &Vec<MessageRef>,
     rx_messages: &Vec<MessageRef>,
-    header: &mut FileBuffer,
-    source: &mut FileBuffer,
+    header: &mut String,
+    source: &mut String,
     options: &Options,
 ) -> Result<()> {
     let namespace = options.namespace();
@@ -18,6 +16,12 @@ pub fn generate_messages(
     for _ in 0..options.indent() {
         indent.push(' ');
     }
+
+    // let mut all_messages = tx_messages.clone();
+    // all_messages.append(&mut rx_messages.clone());
+    //
+    //
+    
 
     // create a unique set of all messages!
     let mut unique_set = tx_messages.clone();
@@ -30,36 +34,19 @@ pub fn generate_messages(
     // create structs for all messages
     for message in &unique_set {
         let message_type_name = message.name();
-        let mut dependencies = vec![];
         // type declartion of the message struct!
         let mut type_def = format!("typedef struct {{\n");
         match message.encoding() {
             Some(encoding) => {
                 for attrib in encoding.attributes() {
-                    let (attrib_type_name, dep) = to_c_type_name(attrib.ty());
-                    match dep {
-                        Some(dep) => {
-                            if !dependencies.contains(&dep) {
-                                dependencies.push(dep);
-                            }
-                        }
-                        None => (),
-                    };
+                    let attrib_type_name = to_c_type_name(attrib.ty());
                     let attrib_name = attrib.name();
                     type_def.push_str(&format!("{indent}{attrib_type_name} {attrib_name};\n"));
                 }
             }
             None => {
                 for signal in message.signals() {
-                    let (signal_type_name, dep) = signal_type_to_c_type(signal.ty());
-                    match dep {
-                        Some(dep) => {
-                            if !dependencies.contains(&dep) {
-                                dependencies.push(dep);
-                            }
-                        }
-                        None => (),
-                    }
+                    let signal_type_name = signal_type_to_c_type(signal.ty());
                     let signal_name = signal.name();
                     type_def.push_str(&format!("{indent}{signal_type_name} {signal_name};\n"));
                 }
@@ -67,17 +54,13 @@ pub fn generate_messages(
         }
 
         type_def.push_str(&format!("}} {message_type_name};\n"));
-        source.add_block(SourceBlock::new(
-            SourceBlockIdentifier::Definition(message_type_name.to_owned()),
-            type_def,
-            dependencies,
-        ))?;
+        header.push_str(&type_def);
 
         if tx_messages.iter().any(|m| m.name() == message.name()) {
             // function to serialize the message struct into a can frame!
             let serialize_func_name = format!("serialize_{message_type_name}");
             let mut serialize_def = format!(
-                "static void {serialize_func_name}({message_type_name}* msg, uint8_t* data) {{\n"
+                "static void {namespace}_{serialize_func_name}({message_type_name}* msg, uint8_t* data) {{\n"
             );
 
             match message.encoding() {
@@ -198,13 +181,7 @@ pub fn generate_messages(
             };
 
             serialize_def.push_str("}\n");
-            source.add_block(SourceBlock::new(
-                SourceBlockIdentifier::Definition(serialize_func_name),
-                serialize_def,
-                vec![SourceBlockIdentifier::Definition(
-                    message_type_name.to_owned(),
-                )],
-            ))?;
+            header.push_str(&serialize_def);
         }
 
         if rx_messages.iter().any(|m| m.name() == message.name()) {
@@ -327,24 +304,18 @@ pub fn generate_messages(
             };
 
             deserialize_def.push_str("}\n");
-            source.add_block(SourceBlock::new(
-                SourceBlockIdentifier::Definition(deserialize_func_name),
-                deserialize_def,
-                vec![SourceBlockIdentifier::Definition(
-                    message_type_name.to_owned(),
-                )],
-            ))?;
+            source.push_str(&deserialize_def);
         }
     }
 
     Ok(())
 }
 
-pub fn signal_type_to_c_type(signal_type: &SignalType) -> (&str, Option<SourceBlockIdentifier>) {
+pub fn signal_type_to_c_type(signal_type: &SignalType) -> &str {
     match signal_type {
         config::SignalType::UnsignedInt { size } => {
             let bit_count = (*size as f64).log2().ceil() as usize;
-            let type_name = if bit_count <= 8 {
+            if bit_count <= 8 {
                 "uint8_t"
             } else if bit_count <= 16 {
                 "uint16_t"
@@ -354,15 +325,11 @@ pub fn signal_type_to_c_type(signal_type: &SignalType) -> (&str, Option<SourceBl
                 "uint64_t"
             } else {
                 panic!()
-            };
-            (
-                type_name,
-                Some(SourceBlockIdentifier::Import("inttypes.h".to_owned())),
-            )
+            }
         }
         config::SignalType::SignedInt { size } => {
             let bit_count = (*size as f64).log2().ceil() as usize;
-            let type_name = if bit_count <= 8 {
+            if bit_count <= 8 {
                 "int8_t"
             } else if bit_count <= 16 {
                 "int16_t"
@@ -372,11 +339,7 @@ pub fn signal_type_to_c_type(signal_type: &SignalType) -> (&str, Option<SourceBl
                 "int64_t"
             } else {
                 panic!()
-            };
-            (
-                type_name,
-                Some(SourceBlockIdentifier::Import("inttypes.h".to_owned())),
-            )
+            }
         }
         config::SignalType::Decimal {
             size,
@@ -384,9 +347,9 @@ pub fn signal_type_to_c_type(signal_type: &SignalType) -> (&str, Option<SourceBl
             scale: _,
         } => {
             if *size <= 32 {
-                ("float", None)
+                "float"
             } else {
-                ("double", None)
+                "double"
             }
         }
     }

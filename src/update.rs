@@ -1,13 +1,11 @@
 use crate::{
     errors::Result,
-    file_buffer::FileBuffer,
     options::Options,
-    source_block::{SourceBlock, SourceBlockIdentifier},
 };
 
 pub fn generate_update(
-    source: &mut FileBuffer,
-    header: &mut FileBuffer,
+    source: &mut String,
+    header: &mut String,
     options: &Options,
 ) -> Result<()> {
     let namespace = options.namespace();
@@ -20,26 +18,14 @@ pub fn generate_update(
 
     let can_update_continue_decl =
         format!("uint32_t {can_update_continue_name}(uint32_t delta_time);\n");
-    header.add_block(SourceBlock::new(
-        SourceBlockIdentifier::Declartion(can_update_continue_name.clone()),
-        can_update_continue_decl,
-        vec![SourceBlockIdentifier::Import("inttypes.h".to_owned())],
-    ))?;
-
-    // fragmentation buffer data!
+    header.push_str(&can_update_continue_decl);
 
     let can_update_continue_def = format!(
-        "uint32_t {can_update_continue_name}(uint32_t delta_time){{
-{indent}return 100;
-}}"
-    );
-    source.add_block(SourceBlock::new(
-        SourceBlockIdentifier::Definition(can_update_continue_name.clone()),
-        can_update_continue_def,
-        vec![SourceBlockIdentifier::Declartion(
-            can_update_continue_name.clone(),
-        )],
-    ))?;
+        "uint32_t {can_update_continue_name}(uint32_t time){{
+{indent}schedule_jobs(time);
+{indent}return scheduler_next_job_timeout();
+}}");
+    source.push_str(&can_update_continue_def);
 
     Ok(())
 }

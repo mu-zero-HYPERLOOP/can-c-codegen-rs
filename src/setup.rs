@@ -1,11 +1,10 @@
-use crate::source_block::{SourceBlockIdentifier, SourceBlock};
-use crate::{file_buffer::FileBuffer, options::Options};
+use crate::options::Options;
 
 use crate::errors::Result;
 
 
 
-pub fn generate_setup(header : &mut FileBuffer, source : &mut FileBuffer, options : &Options) -> Result<()>{
+pub fn generate_setup(source : &mut String, header : &mut String, options : &Options) -> Result<()>{
     let namespace = options.namespace();
     let mut indent = String::new();
     for _ in 0..options.indent() {
@@ -13,24 +12,16 @@ pub fn generate_setup(header : &mut FileBuffer, source : &mut FileBuffer, option
     }
     
 
-    let setup_name = format!("{namespace}_setup");
+    let init_name = format!("{namespace}_init");
 
-    let setup_decl = format!("void {setup_name}();");
+    let init_decl = format!("void {init_name}();\n");
+    header.push_str(&init_decl);
 
-    header.add_block(SourceBlock::new(
-            SourceBlockIdentifier::Declartion(setup_name.clone()),
-            setup_decl,
-            vec![]))?;
-
-    let mut setup_def = format!("void {setup_name}() {{\n");
-    setup_def.push_str(&format!("{indent}//TODO\n"));
-    setup_def.push_str("}\n");
-
-    source.add_block(SourceBlock::new(
-            SourceBlockIdentifier::Definition(setup_name.clone()),
-            setup_def,
-            vec![SourceBlockIdentifier::Declartion(setup_name.clone())]))?;
-
+    let init_def = format!("void {init_name}() {{
+{indent}scheduler_init();
+{indent}schedule_heartbeat_job();
+}}\n");
+    source.push_str(&init_def);
     
     Ok(())
 }

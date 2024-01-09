@@ -1,17 +1,15 @@
-use can_config_rs::config::{self, message, stream::StreamRef, Type, TypeSignalEncoding};
+use can_config_rs::config::{self, message, Type};
 
 use crate::{
     errors::Result,
-    file_buffer::FileBuffer,
     options::Options,
-    source_block::{SourceBlock, SourceBlockIdentifier},
 };
 
 pub fn generate_rx_handlers(
     network_config: &config::NetworkRef,
     node_config: &config::NodeRef,
-    source: &mut FileBuffer,
-    _header: &mut FileBuffer,
+    source: &mut String,
+    _header: &mut String,
     options: &Options,
 ) -> Result<()> {
     let namespace = options.namespace();
@@ -81,7 +79,7 @@ pub fn generate_rx_handlers(
                         "{indent}{resp_msg_name} resp;
 {indent}resp.erno = {namespace}_{command_name}({attribute_list});
 {indent}{frame_type_name} resp_frame;
-{indent}serialize_{resp_msg_name}(&resp, resp_frame.data);
+{indent}{namespace}_serialize_{resp_msg_name}(&resp, resp_frame.data);
 {indent}resp_frame.dlc = {resp_msg_dlc};
 {indent}resp_frame.id = {resp_msg_id};
 {indent}{namespace}_can{resp_bus_id}_send(&resp_frame);
@@ -200,11 +198,7 @@ pub fn generate_rx_handlers(
 static uint32_t {buffer_offset} = 0;\n",
                             size.div_ceil(32)
                         );
-                        source.add_block(SourceBlock::new(
-                            SourceBlockIdentifier::Definition(buffer_name.clone()),
-                            buffer_def,
-                            vec![SourceBlockIdentifier::Import("inttypes.h".to_owned())],
-                        ))?;
+                        source.push_str(&buffer_def);
 
                         let mut fragmentation_logic = String::new();
                         fn generate_fragmentation_logic(
@@ -448,7 +442,7 @@ static uint32_t {buffer_offset} = 0;\n",
 {indent}resp.header.client_id = msg.header.client_id;
 {indent}resp.header.server_id = msg.header.server_id;
 {indent}{frame_type_name} resp_frame;
-{indent}serialize_get_resp(&resp, resp_frame.data);
+{indent}{namespace}_serialize_get_resp(&resp, resp_frame.data);
 {indent}resp_frame.dlc = {resp_dlc};
 {indent}resp_frame.id = {resp_id};
 {indent}{namespace}_can{resp_bus_id}_send(&resp_frame);
@@ -473,11 +467,7 @@ static uint32_t {buffer_offset} = 0;\n",
 {indent}deserialize_{msg_name}(frame->data, &msg);
 {logic}}}\n"
         );
-        source.add_block(SourceBlock::new(
-            SourceBlockIdentifier::Definition(handler_name.clone()),
-            handler_def,
-            vec![SourceBlockIdentifier::Definition(frame_type_name.clone())],
-        ))?;
+        source.push_str(&handler_def);
     }
 
     Ok(())
