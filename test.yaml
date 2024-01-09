@@ -36,7 +36,7 @@ nodes:
         description : Pressure Value 1
         unit : bar
       position:
-        type : d32<-1..100>
+        type : d64<-1..100>
         access : global
         description: estimated position of the pod
         unit : m

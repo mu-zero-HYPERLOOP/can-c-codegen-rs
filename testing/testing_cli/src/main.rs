@@ -15,7 +15,7 @@ fn main() {
     options.set_source_file_path(&format!("{path}/canzero.c"));
     options.set_header_file_path(&format!("{path}/canzero.h"));
     options.set_platform(Platform::Linux);
-    options.set_namespace("can");
+    options.set_namespace("canzero");
 
     let network_config = can_yaml_config_rs::parse_yaml_config_from_file(config_path)
         .expect("failed to parse network_config");

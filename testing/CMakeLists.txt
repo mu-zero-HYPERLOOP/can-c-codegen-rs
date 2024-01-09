@@ -6,7 +6,7 @@
 
 cmake_minimum_required(VERSION 3.5)
 
-project(test1 CXX C)
+project(test1 C)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_custom_command(
@@ -30,10 +30,6 @@ add_custom_command(
   DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/canzero
 )
 
-## mock can
-add_subdirectory(mock_can)
-
-add_executable(${PROJECT_NAME} src/main.cpp ${CMAKE_CURRENT_BINARY_DIR}/canzero/canzero.c)
+add_executable(${PROJECT_NAME} src/main.c ${CMAKE_CURRENT_BINARY_DIR}/canzero/canzero.c)
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_BINARY_DIR}/canzero/)
-target_link_libraries(${PROJECT_NAME} PRIVATE mock_can)
 

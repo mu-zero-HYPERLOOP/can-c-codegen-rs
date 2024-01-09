@@ -18,7 +18,7 @@ impl Default for Options {
             header_file_path : "canzero.h".to_owned(),
             platform : Platform::Linux,
             indent : 2,
-            namespace : "can".to_owned(),
+            namespace : "canzero".to_owned(),
         }
     }
 }

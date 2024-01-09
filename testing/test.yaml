@@ -38,7 +38,7 @@ nodes:
         description : Pressure Value 1
         unit : bar
       position:
-        type : d32<-1..100>
+        type : d60<-1..100>
         access : global
         description: estimated position of the pod
         unit : m
@@ -107,14 +107,14 @@ nodes:
           - acceleration_x
           - acceleration_y
           - acceleration_z
-      states:
-        description: States of the subsytems
-        interval : 100ms
-        mapping:
-          - levitation_state
-          - guidance_state
-          - cooling_state
-          - global_state
+
+    rx_streams:
+      master:
+        states:
+          levitation_state : levitation_state
+          guidance_state : guidance_state
+          cooling_state : cooling_state
+          global_state : global_state
         
 
     commands:
@@ -151,9 +151,11 @@ nodes:
           - master
       test6:
         arguments: 
-          - sample_count: u32
+          - sample_count6: u32
         callee:
           - master
+
+
   master:
     description : Master node running the main state machine
     object_dictionary:
@@ -161,6 +163,33 @@ nodes:
         type : d8<-10..100>
         access : global
         description : CPU Temperature of the SECU.
+      levitation_state:
+        type: u8
+        access: global
+        description: state of the MLUs
+      guidance_state:
+        type: u8
+        access: global
+        description: state of the MGU
+      cooling_state:
+        type: u8
+        access: global
+        description: state of the cooling system
+      global_state:
+        type: u8
+        access: global
+        descríption: state of the overall pod
+    tx_stream:
+      states:
+        description: States of the subsytems
+        interval : 100ms
+        mapping:
+          - levitation_state
+          - guidance_state
+          - cooling_state
+          - global_state
+
+      
     rx_streams:
       secu:
         ecu_temperatures:

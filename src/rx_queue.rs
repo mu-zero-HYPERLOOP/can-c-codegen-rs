@@ -6,8 +6,9 @@ use crate::errors::Result;
 pub fn generate_rx_queue(
     _header: &mut FileBuffer,
     source: &mut FileBuffer,
-    _options: &Options,
+    options: &Options,
 ) -> Result<()> {
+    let namespace = options.namespace();
     
     let queue_def = 
 "typedef struct {
@@ -17,30 +18,31 @@ pub fn generate_rx_queue(
         queue_def.to_owned(),
         vec![]))?;
 
-    let enqueue_def = 
-"void rx_queue_enqueue(rx_queue* self, can_frame* frame) {
+    let can_frame_type = format!("{namespace}_frame");
+    let enqueue_def = format!(
+"void rx_queue_enqueue(rx_queue* self, {can_frame_type}* frame) {{
   //TODO
-}\n";
+}}\n");
     source.add_block(SourceBlock::new(
         SourceBlockIdentifier::Definition("rx_queue_enqueue".to_owned()),
-        enqueue_def.to_owned(),
+        enqueue_def,
         vec![
             SourceBlockIdentifier::Definition("rx_queue".to_owned()),
-            SourceBlockIdentifier::Definition("can_frame".to_owned()),
+            SourceBlockIdentifier::Definition(can_frame_type.clone()),
         ],
     ))?;
 
-    let dequeue_def = 
-"int rx_queue_dequeue(rx_queue* self, can_frame* frame) {
+    let dequeue_def = format!(
+"int rx_queue_dequeue(rx_queue* self, {can_frame_type}* frame) {{
   //TODO
   return 0;
-}\n";
+}}\n");
     source.add_block(SourceBlock::new(
         SourceBlockIdentifier::Definition("rx_queue_dequeue".to_owned()),
-        dequeue_def.to_owned(),
+        dequeue_def,
         vec![
             SourceBlockIdentifier::Definition("rx_queue".to_owned()),
-            SourceBlockIdentifier::Definition("can_frame".to_owned()),
+            SourceBlockIdentifier::Definition(can_frame_type.clone()),
         ],
     ))?;
     let queue_var_def = "static rx_queue can0_rx_queue;\n";

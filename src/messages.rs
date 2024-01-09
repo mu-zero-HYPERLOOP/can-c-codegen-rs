@@ -402,7 +402,7 @@ fn bit_access_code(bit_offset: usize, bit_size: usize, buffer_name: &str) -> Str
         format!("(((int32_t*){buffer_name})[{word_index}] & 0x{mask:X}) >> {shift}")
     } else {
         let mask = (0xFFFFFFFFFFFFFFFF as u64)
-            .overflowing_shl(64 - bit_size as u32)
+            .overflowing_shl(32 - bit_size as u32)
             .0
             >> bit_offset;
         let shift = bit_offset;
