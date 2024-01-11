@@ -711,6 +711,9 @@ pub fn generate_rx_handlers(
                 );
 
                 (logic, false)
+            },
+            message::MessageUsage::Heartbeat => {
+                ("".to_owned(), false)
             }
             message::MessageUsage::External { interval: _ } => ("".to_owned(), true),
         };

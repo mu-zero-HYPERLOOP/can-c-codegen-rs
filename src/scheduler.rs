@@ -17,11 +17,6 @@ pub fn generate_scheduler(network_config : &config::NetworkRef, node_config : &c
     let indent4 = format!("{indent2}{indent2}");
 
     let node_id = node_config.id();
-    let get_resp_id = match network_config.get_resp_message().id() {
-        config::MessageId::StandardId(id) => format!("0x{id:X}"),
-        config::MessageId::ExtendedId(id) => format!("(0x{id:X} | {namespace}_FRAME_IDE_BIT)"),
-    };
-    let get_resp_dlc = network_config.get_resp_message().dlc();
     let get_resp_bus_id = network_config.get_resp_message().bus().id();
     let command_resp_dlc = match node_config.extern_commands().first() {
         Some(command) => command.1.tx_message().dlc(),
@@ -35,6 +30,8 @@ pub fn generate_scheduler(network_config : &config::NetworkRef, node_config : &c
 {indent4}break;
 "));
     }
+    
+    let heartbeat_bus_id = network_config.heartbeat_message().bus().id();
         
     
     source.push_str(&format!(
@@ -206,6 +203,7 @@ static void schedule_jobs(uint32_t time) {{
 {indent2}{namespace}_enter_critical();
 {indent2}job *to_process = schedule_heap_get_min();
 {indent2}if (to_process->timeout > time) {{
+{indent3}{namespace}_exit_critical();
 {indent3}return;
 {indent2}}}
 {indent2}switch (to_process->tag) {{
@@ -248,11 +246,16 @@ static void schedule_jobs(uint32_t time) {{
 {indent2}case HEARTBEAT_JOB_TAB: {{
 {indent3}// TODO config requires a heartbeat message for each node!
 {indent3}schedule_heap_decrement_top(time + heartbeat_interval);
-{indent3}// TODO exit critical!
+{indent3}{namespace}_exit_critical();
+{indent3}{namespace}_message_heartbeat heartbeat;
+{indent3}heartbeat.node_id = {node_id};
+{indent3}{namespace}_frame heartbeat_frame;
+{indent3}{namespace}_serialize_{namespace}_message_heartbeat(&heartbeat, &heartbeat_frame);
+{indent3}{namespace}_can{heartbeat_bus_id}_send(&heartbeat_frame);
 {indent3}break;
 {indent2}}}
 {indent2}default:
-{indent3}// TODO exit critical!
+{indent3}{namespace}_exit_critical();
 {indent3}break;
 {indent2}}}
 {indent}}}

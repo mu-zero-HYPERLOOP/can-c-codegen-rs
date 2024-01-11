@@ -1,4 +1,7 @@
 
+buses:
+  can0: 
+    baudrate: 1000000
 
 
 baudrate : 10

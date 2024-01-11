@@ -18,7 +18,12 @@ pub fn generate_messages(
     }
 
     let mut all_messages = tx_messages.clone();
-    all_messages.append(&mut rx_messages.clone());
+    for rx_message in rx_messages{
+        if all_messages.iter().any(|m| m.name() == rx_message.name()) {
+            continue;
+        }
+        all_messages.push(rx_message.clone());
+    }
 
     // create structs for all messages
     for message in &all_messages {
@@ -134,7 +139,6 @@ pub fn generate_messages(
                                                         break;
                                                     }
                                                 }
-                                                println!("limit {limit:3}");
                                                 serialized_def.push_str(&format!(
 "{indent}if ({attrib_name}_{attrib_offset} > {limit:.3}) {{
 {indent}{indent}{attrib_name}_{attrib_offset} = {limit:.3};
