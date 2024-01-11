@@ -89,10 +89,10 @@ static void *update_loop(void *_) {
         break;
     }
     uint32_t now = time_now_ms();
-    printf("[%u] canzero_update\n", now);
+    /* printf("[%u] canzero_update\n", now); */
     fflush(stdout);
     next_update = canzero_update_continue(now);
-    printf("[%u] timeout canzero_update until %u\n", now, next_update);
+    /* printf("[%u] timeout canzero_update until %u\n", now, next_update); */
   }
   return NULL;
 }

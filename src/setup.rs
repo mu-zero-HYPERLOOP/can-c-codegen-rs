@@ -6,7 +6,7 @@ use crate::errors::Result;
 
 
 
-pub fn generate_setup(network_config : &config::NetworkRef, source : &mut String, header : &mut String, options : &Options) -> Result<()>{
+pub fn generate_setup(node_config : &config::NodeRef, network_config : &config::NetworkRef, source : &mut String, header : &mut String, options : &Options) -> Result<()>{
     let namespace = options.namespace();
     let mut indent = String::new();
     for _ in 0..options.indent() {
@@ -26,10 +26,17 @@ pub fn generate_setup(network_config : &config::NetworkRef, source : &mut String
         setup_cans.push_str(&format!("{indent}{namespace}_can{bus_id}_setup({baudrate}, NULL, 0);\n"));
     }
 
+    let mut schedule_stream_jobs_logic = String::new();
+    for tx_stream in node_config.tx_streams() {
+        let stream_name = tx_stream.name();
+        schedule_stream_jobs_logic.push_str(&format!("{indent}schedule_{stream_name}_interval_job();\n"));
+    }
+
     let init_def = format!("void {init_name}() {{
 {setup_cans}
 {indent}scheduler_init();
 {indent}schedule_heartbeat_job();
+{schedule_stream_jobs_logic}
 }}\n");
     source.push_str(&init_def);
     

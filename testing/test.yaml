@@ -99,7 +99,7 @@ nodes:
           - pressure_sensor_3
       position_and_velocity:
         description : Position and velocity values of the pod
-        interval : 100ms
+        interval : 10ms
         mapping:
           - position
       acceleration:

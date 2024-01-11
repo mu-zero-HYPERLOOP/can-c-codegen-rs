@@ -32,6 +32,65 @@ pub fn generate_scheduler(network_config : &config::NetworkRef, node_config : &c
     }
     
     let heartbeat_bus_id = network_config.heartbeat_message().bus().id();
+
+    let mut stream_case_logic = String::new();
+    let mut schedule_stream_job_def = String::new();
+    let mut stream_id = 0;
+    let node_name = node_config.name();
+    let mut first = true;
+    for tx_stream in node_config.tx_streams() {
+        if !first {
+            stream_case_logic.push_str("\n");
+        }
+
+        first = false;
+
+        let stream_name = tx_stream.name();
+        let stream_max_interval = tx_stream.max_interval().as_millis() as u32;
+    
+        schedule_stream_job_def.push_str(&format!(
+"static job {stream_name}_interval_job;
+static const uint32_t {stream_name}_interval = {stream_max_interval};
+static void schedule_{stream_name}_interval_job(){{
+{indent}{stream_name}_interval_job.timeout = {namespace}_get_time() + {stream_name}_interval;
+{indent}{stream_name}_interval_job.tag = STREAM_INTERVAL_JOB;
+{indent}{stream_name}_interval_job.job.stream_interval_job.stream_id = {stream_id};
+{indent}schedule_job(&{stream_name}_interval_job);
+}}
+"));
+
+        let mut write_attribs_logic = String::new();
+        let mut first = true;
+        for (mapping, encoding) in std::iter::zip(tx_stream.mapping(), tx_stream.message().encoding().expect("stream messages are expected to define a encoding").attributes()) { 
+            if !first {
+                write_attribs_logic.push_str("\n");
+            }
+            first = false;
+            match mapping {
+                Some(object_entry) => {
+                    let oe_name = object_entry.name();
+                    let oe_var = format!("__oe_{oe_name}");
+                    let msg_attrib = encoding.name();
+                    write_attribs_logic.push_str(&format!("{indent4}stream_message.{msg_attrib} = {oe_var};"));
+                }
+                None => panic!("tx_streams are expected to define a complete mapping"),
+            }
+        }
+        let stream_bus_id = tx_stream.message().bus().id();
+
+        stream_case_logic.push_str(&format!(
+"{indent3}case {stream_id}: {{
+{indent4}schedule_heap_decrement_top(time + {stream_max_interval});
+{indent4}{namespace}_exit_critical();
+{indent4}{namespace}_message_{node_name}_stream_{stream_name} stream_message;
+{write_attribs_logic}
+{indent4}{namespace}_frame stream_frame;
+{indent4}{namespace}_serialize_{namespace}_message_{node_name}_stream_{stream_name}(&stream_message, &stream_frame);
+{indent4}{namespace}_can{stream_bus_id}_send(&stream_frame);
+{indent4}break;
+{indent3}}}"));
+        stream_id += 1;
+    }
         
     
     source.push_str(&format!(
@@ -40,6 +99,7 @@ typedef enum {{
 {indent}GET_RESP_FRAGMENTATION_JOB_TAG,
 {indent}HEARTBEAT_JOB_TAB,
 {indent}COMMAND_RESP_TIMEOUT_JOB_TAB,
+{indent}STREAM_INTERVAL_JOB,
 }} job_tag;
 typedef struct {{
 {indent}uint32_t *buffer;
@@ -53,11 +113,15 @@ typedef struct {{
 {indent}uint8_t bus_id;
 }} command_resp_timeout_job;
 typedef struct {{
+{indent}uint32_t stream_id;
+}} stream_interval_job;
+typedef struct {{
 {indent}uint32_t timeout;
 {indent}job_tag tag;
 {indent}union {{
 {indent2}get_resp_fragmentation_job get_fragmentation_job;
 {indent2}command_resp_timeout_job command_timeout_job;
+{indent2}stream_interval_job stream_interval_job;
 {indent}}} job;
 }} job;
 union job_pool_allocator_entry {{
@@ -139,7 +203,7 @@ static void schedule_heap_bubble_down(int index) {{
 {indent2}if (left != -1 && schedule_heap.heap[left]->timeout < schedule_heap.heap[index]->timeout) {{
 {indent3}min = left;
 {indent2}}}
-{indent2}if (right != -1 && schedule_heap.heap[right]->timeout < schedule_heap.heap[index]->timeout) {{
+{indent2}if (right != -1 && schedule_heap.heap[right]->timeout < schedule_heap.heap[min]->timeout) {{
 {indent3}min = right;
 {indent2}}}
 {indent2}if (min != index) {{
@@ -198,6 +262,7 @@ static void schedule_heartbeat_job() {{
 {indent}heartbeat_job.tag = HEARTBEAT_JOB_TAB;
 {indent}schedule_job(&heartbeat_job);
 }}
+{schedule_stream_job_def}
 static void schedule_jobs(uint32_t time) {{
 {indent}for (uint8_t i = 0; i < 100; ++i) {{
 {indent2}{namespace}_enter_critical();
@@ -207,6 +272,26 @@ static void schedule_jobs(uint32_t time) {{
 {indent3}return;
 {indent2}}}
 {indent2}switch (to_process->tag) {{
+{indent2}case STREAM_INTERVAL_JOB: {{
+{indent3}switch (to_process->job.stream_interval_job.stream_id) {{
+{stream_case_logic}
+{indent3}default:
+{indent4}{namespace}_exit_critical();
+{indent4}break;
+{indent3}}}
+{indent3}break;
+{indent2}}}
+{indent2}case HEARTBEAT_JOB_TAB: {{
+{indent3}// TODO config requires a heartbeat message for each node!
+{indent3}schedule_heap_decrement_top(time + heartbeat_interval);
+{indent3}{namespace}_exit_critical();
+{indent3}{namespace}_message_heartbeat heartbeat;
+{indent3}heartbeat.node_id = {node_id};
+{indent3}{namespace}_frame heartbeat_frame;
+{indent3}{namespace}_serialize_{namespace}_message_heartbeat(&heartbeat, &heartbeat_frame);
+{indent3}{namespace}_can{heartbeat_bus_id}_send(&heartbeat_frame);
+{indent3}break;
+{indent2}}}
 {indent2}case GET_RESP_FRAGMENTATION_JOB_TAG: {{
 {indent3}get_resp_fragmentation_job *fragmentation_job = &to_process->job.get_fragmentation_job;
 {indent3}{namespace}_message_get_resp fragmentation_response;
@@ -241,17 +326,6 @@ static void schedule_jobs(uint32_t time) {{
 {indent3}switch (bus_id) {{
 {command_resp_send_on_bus_cases}
 {indent3}}}
-{indent3}break;
-{indent2}}}
-{indent2}case HEARTBEAT_JOB_TAB: {{
-{indent3}// TODO config requires a heartbeat message for each node!
-{indent3}schedule_heap_decrement_top(time + heartbeat_interval);
-{indent3}{namespace}_exit_critical();
-{indent3}{namespace}_message_heartbeat heartbeat;
-{indent3}heartbeat.node_id = {node_id};
-{indent3}{namespace}_frame heartbeat_frame;
-{indent3}{namespace}_serialize_{namespace}_message_heartbeat(&heartbeat, &heartbeat_frame);
-{indent3}{namespace}_can{heartbeat_bus_id}_send(&heartbeat_frame);
 {indent3}break;
 {indent2}}}
 {indent2}default:

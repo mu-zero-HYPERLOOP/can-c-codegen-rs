@@ -89,7 +89,7 @@ pub fn generate(
         &options,
     )?;
     generate_update(&mut src, &mut header, &options)?;
-    generate_setup(&network_config, &mut src, &mut header, &options)?;
+    generate_setup(node_config, &network_config, &mut src, &mut header, &options)?;
     // generate_extern_guard_bottom(&mut header)?;
     generate_header_guard_bottom(&mut header)?;
 
