@@ -38,7 +38,7 @@ nodes:
         description : Pressure Value 1
         unit : bar
       position:
-        type : d60<-1..100>
+        type : d64<-1..100>
         access : global
         description: estimated position of the pod
         unit : m
@@ -99,7 +99,6 @@ nodes:
         interval : 100ms
         mapping:
           - position
-          - velocity
       acceleration:
         description: Acceleration of the pods X,Y,Z axis
         internal: 100ms

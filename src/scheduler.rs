@@ -211,7 +211,7 @@ static void schedule_jobs(uint32_t time) {{
 {indent2}switch (to_process->tag) {{
 {indent2}case GET_RESP_FRAGMENTATION_JOB_TAG: {{
 {indent3}get_resp_fragmentation_job *fragmentation_job = &to_process->job.get_fragmentation_job;
-{indent3}get_resp fragmentation_response;
+{indent3}{namespace}_message_get_resp fragmentation_response;
 {indent3}fragmentation_response.header.sof = 0;
 {indent3}fragmentation_response.header.toggle = (fragmentation_job->offset % 2) + 1;
 {indent3}fragmentation_response.header.od_index = fragmentation_job->od_index;
@@ -228,9 +228,7 @@ static void schedule_jobs(uint32_t time) {{
 {indent3}}}
 {indent3}{namespace}_exit_critical();
 {indent3}canzero_frame fragmentation_frame;
-{indent3}fragmentation_frame.id = {get_resp_id};
-{indent3}fragmentation_frame.dlc = {get_resp_dlc}; 
-{indent3}{namespace}_serialize_get_resp(&fragmentation_response, fragmentation_frame.data);
+{indent3}{namespace}_serialize_{namespace}_message_get_resp(&fragmentation_response, &fragmentation_frame);
 {indent3}canzero_can{get_resp_bus_id}_send(&fragmentation_frame);
 {indent3}break;
 {indent2}}}

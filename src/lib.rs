@@ -2,7 +2,6 @@ use can_config_rs::config;
 use can_module_hooks::generate_hooks;
 use command_hooks::generate_command_hooks;
 use errors::{Error, Result};
-use extern_c_guard::{generate_extern_guard_top, generate_extern_guard_bottom};
 use header_guard::{generate_header_guard_top, generate_header_guard_bottom};
 use includes::generate_includes;
 use options::Options;
@@ -59,7 +58,7 @@ pub fn generate(
     generate_hooks(network_config.buses(), &mut src, &mut header, &options)?;
     generate_command_hooks(node_config.commands(), &mut src, &mut header, &options)?;
 
-    generate_extern_guard_top(&mut header)?;
+    // generate_extern_guard_top(&mut header)?;
     generate_object_entries(
         node_config.object_entries(),
         &mut header,
@@ -74,6 +73,7 @@ pub fn generate(
         &options,
     )?;
     // generate_rx_queue(&mut header, &mut src, &options)?;
+    generate_scheduler(&network_config, node_config, &mut src, &mut header, &options)?;
     generate_rx_handlers(
         &network_config,
         node_config,
@@ -88,10 +88,9 @@ pub fn generate(
         &mut src,
         &options,
     )?;
-    generate_scheduler(&network_config, node_config, &mut src, &mut header, &options)?;
     generate_update(&mut src, &mut header, &options)?;
-    generate_setup(&mut src, &mut header, &options)?;
-    generate_extern_guard_bottom(&mut header)?;
+    generate_setup(&network_config, &mut src, &mut header, &options)?;
+    // generate_extern_guard_bottom(&mut header)?;
     generate_header_guard_bottom(&mut header)?;
 
     std::fs::write(options.source_file_path(), &src).expect(&format!(

@@ -41,11 +41,11 @@ pub fn generate_poll(
             }
             let message_name = message.name();
             // first bit stands for ide bit
-            let key = match message.id() {
-                config::MessageId::StandardId(id) => id << 1 | 0,
-                config::MessageId::ExtendedId(id) => id << 1 | 1,
+            let id = match message.id() {
+                config::MessageId::StandardId(id) => format!("0x{id:X}"),
+                config::MessageId::ExtendedId(id) => format!("(0x{id:X} | {}_FRAME_IDE_BIT)", namespace.to_uppercase()),
             };
-            poll_func_def.push_str(&format!("{indent3}case  0x{key:X}:
+            poll_func_def.push_str(&format!("{indent3}case {id}:
 {indent4}{namespace}_handle_{message_name}(&frame);
 {indent4}break;
 "

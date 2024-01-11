@@ -1,9 +1,6 @@
 use can_config_rs::config::{self, message, Type};
 
-use crate::{
-    errors::Result,
-    options::Options,
-};
+use crate::{errors::Result, options::Options};
 
 pub fn generate_rx_handlers(
     network_config: &config::NetworkRef,
@@ -19,6 +16,7 @@ pub fn generate_rx_handlers(
     }
     let indent2 = format!("{indent}{indent}");
     let indent3 = format!("{indent2}{indent}");
+    let indent4 = format!("{indent2}{indent2}");
 
     let frame_type_name = format!("{namespace}_frame");
     for message in node_config.rx_messages() {
@@ -64,24 +62,15 @@ pub fn generate_rx_handlers(
                 }
                 let resp_msg = command.rx_message();
                 let resp_msg_name = resp_msg.name();
-                let resp_msg_dlc = resp_msg.dlc();
-                let resp_msg_id = match resp_msg.id() {
-                    config::MessageId::StandardId(id) => format!("{id}"),
-                    config::MessageId::ExtendedId(id) => {
-                        format!("({id} | {namespace}_FRAME_IDE_BIT)")
-                    }
-                };
                 let resp_bus_id = resp_msg.bus().id();
 
                 let command_name = command.name();
                 (
                     format!(
-                        "{indent}{resp_msg_name} resp;
+                        "{indent}{namespace}_message_{resp_msg_name} resp;
 {indent}resp.erno = {namespace}_{command_name}({attribute_list});
 {indent}{frame_type_name} resp_frame;
-{indent}{namespace}_serialize_{resp_msg_name}(&resp, resp_frame.data);
-{indent}resp_frame.dlc = {resp_msg_dlc};
-{indent}resp_frame.id = {resp_msg_id};
+{indent}{namespace}_serialize_{namespace}_message_{resp_msg_name}(&resp, &resp_frame);
 {indent}{namespace}_can{resp_bus_id}_send(&resp_frame);
 "
                     ),
@@ -89,17 +78,10 @@ pub fn generate_rx_handlers(
                 )
             }
             message::MessageUsage::CommandResp(_) => todo!(),
-            message::MessageUsage::GetResp => ("".to_owned(), false),
+            message::MessageUsage::GetResp => panic!(),
             message::MessageUsage::GetReq => {
                 let mut logic = String::new();
                 let resp = network_config.get_resp_message();
-                let resp_dlc = resp.dlc();
-                let resp_id = match resp.id() {
-                    config::MessageId::StandardId(id) => format!("{id}"),
-                    config::MessageId::ExtendedId(id) => {
-                        format!("({id} | {namespace}_FRAME_IDE_BIT)")
-                    }
-                };
                 let resp_bus_id = resp.bus().id();
                 let mut case_logic = format!("{indent}switch (msg.header.od_index) {{\n");
                 for object_entry in node_config.object_entries() {
@@ -192,12 +174,8 @@ pub fn generate_rx_handlers(
                         );
                     } else {
                         let buffer_name = format!("{var}_rx_fragmentation_buffer");
-                        let buffer_offset = format!("{var}_rx_fragmentation_offset");
-                        let buffer_def = format!(
-                            "static uint32_t {buffer_name}[{}];
-static uint32_t {buffer_offset} = 0;\n",
-                            size.div_ceil(32)
-                        );
+                        let buffer_def =
+                            format!("static uint32_t {buffer_name}[{}];\n", size.div_ceil(32));
                         source.push_str(&buffer_def);
 
                         let mut fragmentation_logic = String::new();
@@ -207,8 +185,8 @@ static uint32_t {buffer_offset} = 0;\n",
                             var: &str,
                             buffer: &str,
                             bit_offset: &mut usize,
-                            indent2 : &str,
-                            indent3 : &str,
+                            indent2: &str,
+                            indent3: &str,
                         ) {
                             match ty {
                                 Type::Primitive(signal_type) => {
@@ -283,7 +261,9 @@ static uint32_t {buffer_offset} = 0;\n",
                                         }
                                     } else if size <= 64 {
                                         logic.push_str(&format!("{indent2}{{\n"));
-                                        logic.push_str(&format!("{indent3}uint64_t masked = {val};\n"));
+                                        logic.push_str(&format!(
+                                            "{indent3}uint64_t masked = {val};\n"
+                                        ));
                                         if *bit_offset % 32 == 0 {
                                             let lower_word_offset = *bit_offset / 32;
                                             let upper_word_offset = lower_word_offset + 1;
@@ -399,16 +379,24 @@ static uint32_t {buffer_offset} = 0;\n",
                                     }
                                 }
                                 Type::Struct {
-                                    name : _,
-                                    description : _,
+                                    name: _,
+                                    description: _,
                                     attribs,
-                                    visibility : _,
+                                    visibility: _,
                                 } => {
                                     for (attrib_name, attrib_ty) in attribs {
-                                        generate_fragmentation_logic(logic, &attrib_ty, &format!("{var}.{attrib_name}"), buffer, bit_offset, indent2, indent3);
+                                        generate_fragmentation_logic(
+                                            logic,
+                                            &attrib_ty,
+                                            &format!("{var}.{attrib_name}"),
+                                            buffer,
+                                            bit_offset,
+                                            indent2,
+                                            indent3,
+                                        );
                                     }
                                 }
-                                Type::Array { len : _, ty : _ } => todo!(),
+                                Type::Array { len: _, ty: _ } => todo!(),
                             }
                         }
                         generate_fragmentation_logic(
@@ -418,40 +406,312 @@ static uint32_t {buffer_offset} = 0;\n",
                             &buffer_name,
                             &mut 0,
                             &indent2,
-                            &indent3
+                            &indent3,
                         );
 
+                        let buffer_size = size.div_ceil(32);
+                        let od_index = object_entry.id();
                         case_logic += &format!(
                             "{indent}case {id}: {{
 {fragmentation_logic}
-{indent2}{buffer_offset} = 1;
 {indent2}resp.data = {buffer_name}[0];
 {indent2}resp.header.sof = 1;
 {indent2}resp.header.eof = 0;
 {indent2}resp.header.toggle = 1;
-{indent2}{namespace}_request_update(10);
+{indent2}schedule_get_resp_fragmentation_job({buffer_name}, {buffer_size}, {od_index}, msg.header.server_id);
 {indent2}break;
 {indent}}}\n"
                         );
                     }
                 }
                 case_logic += &format!("{indent}}}\n");
+                let node_id = node_config.id();
                 logic += &format!(
-                    "{indent}get_resp resp;
+                    "{indent}if (msg.header.server_id != {node_id}) {{
+{indent2}return;
+{indent}}}
+{indent}{namespace}_message_get_resp resp;
 {case_logic}{indent}resp.header.od_index = msg.header.od_index;
 {indent}resp.header.client_id = msg.header.client_id;
 {indent}resp.header.server_id = msg.header.server_id;
 {indent}{frame_type_name} resp_frame;
-{indent}{namespace}_serialize_get_resp(&resp, resp_frame.data);
-{indent}resp_frame.dlc = {resp_dlc};
-{indent}resp_frame.id = {resp_id};
+{indent}{namespace}_serialize_{namespace}_message_get_resp(&resp, &resp_frame);
 {indent}{namespace}_can{resp_bus_id}_send(&resp_frame);
 "
                 );
                 (logic, false)
             }
-            message::MessageUsage::SetResp => ("".to_owned(), false),
-            message::MessageUsage::SetReq => ("".to_owned(), false),
+            message::MessageUsage::SetResp => panic!(),
+            message::MessageUsage::SetReq => {
+                let node_id = node_config.id();
+                let mut case_logic = format!("{indent}switch (msg.header.od_index) {{\n");
+                for object_entry in node_config.object_entries() {
+                    let od_index = object_entry.id();
+                    let size = ty_size(object_entry.ty());
+                    let mut parse_logic = String::new();
+                    let oe_name = object_entry.name();
+                    let oe_var = format!("__oe_{oe_name}");
+                    if size <= 32 {
+                        fn generate_parse_logic(
+                            parse_logic: &mut String,
+                            ty: &Type,
+                            var: &str,
+                            attrib_offset: &mut usize,
+                        ) {
+                            match ty {
+                                Type::Primitive(signal_type) => {
+                                    let size = signal_type.size() as usize;
+
+                                    let masked_val =
+                                        format!("(msg.data & (0xFFFFFFFF >> (32 - {size})))");
+
+                                    let parsed_val = match signal_type {
+                                        config::SignalType::UnsignedInt { size } => {
+                                            if *size <= 8 {
+                                                format!("(uint8_t){masked_val}")
+                                            } else if *size <= 16 {
+                                                format!("(uint16_t){masked_val}")
+                                            } else if *size <= 32 {
+                                                format!("(uint32_t){masked_val}")
+                                            } else if *size <= 64 {
+                                                format!("(uint64_t){masked_val}")
+                                            } else {
+                                                panic!("unsigned integers larger than 64 bit are not supported");
+                                            }
+                                        }
+                                        config::SignalType::SignedInt { size } => {
+                                            if *size <= 8 {
+                                                format!("(int8_t){masked_val}")
+                                            } else if *size <= 16 {
+                                                format!("(int16_t){masked_val}")
+                                            } else if *size <= 32 {
+                                                format!("(int32_t){masked_val}")
+                                            } else if *size <= 64 {
+                                                format!("(int64_t){masked_val}")
+                                            } else {
+                                                panic!("unsigned integers larger than 64 bit are not supported");
+                                            }
+                                        }
+                                        config::SignalType::Decimal {
+                                            size,
+                                            offset,
+                                            scale,
+                                        } => {
+                                            if *size <= 32 {
+                                                format!(
+                                                    "(float)({masked_val} * {scale} + {offset})"
+                                                )
+                                            } else if *size <= 64 {
+                                                format!(
+                                                    "(double)({masked_val} * {scale} + {offset})"
+                                                )
+                                            } else {
+                                                panic!("decimal data types larger than 64 bit are not supported");
+                                            }
+                                        }
+                                    };
+                                    parse_logic.push_str(&format!("{var} = {parsed_val}"));
+                                    *attrib_offset += size as usize;
+                                }
+                                Type::Struct {
+                                    name: _,
+                                    description: _,
+                                    attribs,
+                                    visibility: _,
+                                } => {
+                                    for (attrib_name, attrib_ty) in attribs {
+                                        generate_parse_logic(
+                                            parse_logic,
+                                            attrib_ty,
+                                            &format!("{var}.{attrib_name}"),
+                                            attrib_offset,
+                                        );
+                                    }
+                                }
+                                Type::Enum {
+                                    name,
+                                    description: _,
+                                    size,
+                                    entries: _,
+                                    visibility: _,
+                                } => {
+                                    let size = *size as usize;
+
+                                    let masked_val =
+                                        format!("(msg.data & (0xFFFFFFFF >> (32 - {size})))");
+
+                                    let parsed_val = format!("({name})({masked_val})");
+                                    parse_logic.push_str(&format!("{var} = {parsed_val}"));
+                                    *attrib_offset += size as usize;
+                                }
+                                Type::Array { len: _, ty: _ } => todo!(),
+                            }
+                        }
+                        generate_parse_logic(&mut parse_logic, object_entry.ty(), &oe_var, &mut 0);
+                        case_logic.push_str(&format!(
+                            "{indent}case {od_index} : {{
+{indent2}if (msg.header.sof != 1 || msg.header.toggle != 1 || msg.header.eof != 1) {{
+{indent3}return;
+{indent2}}}
+{indent2}{parse_logic};
+{indent2}break;
+{indent}}}
+"
+                        ));
+                    } else {
+                        let word_size = size.div_ceil(32);
+                        let buffer_name = format!("{oe_var}_tx_fragmentation_buffer");
+                        let buffer_offset = format!("{oe_var}_tx_fragmentation_offset");
+                        source.push_str(&format!("static uint32_t {buffer_name}[{word_size}];\n"));
+                        source.push_str(&format!("static uint32_t {buffer_offset} = 0;\n"));
+
+                        let mut write_logic = String::new();
+                        fn generate_write_logic(
+                            write_logic: &mut String,
+                            ty: &Type,
+                            bit_offset: &mut usize,
+                            buffer_name: &str,
+                            var: &str,
+                            indent: &str,
+                        ) {
+                            match ty {
+                                Type::Primitive(signal_type) => {
+                                    let size = signal_type.size() as usize;
+                                    let bit_word_offset = *bit_offset % 32;
+                                    let word_offset = *bit_offset / 32;
+                                    let val_bits = if bit_word_offset == 0 && size <= 32 {
+                                        format!("({buffer_name}[{word_offset}] & (0xFFFFFFFF >> (32 - {size})))")
+                                    } else if bit_word_offset == 0 && size > 32 {
+                                        assert!(size <= 64);
+                                        let upper_word_offset = word_offset + 1;
+                                        let upper_word_bit_offset = (bit_word_offset + size) - 32;
+                                        format!("(uint64_t){buffer_name}[{word_offset}] | (((uint64_t)({buffer_name}[{upper_word_offset}] & (0xFFFFFFFF >> (32 - {upper_word_bit_offset})))) << 32)")
+                                    } else if bit_word_offset + size <= 32 {
+                                        format!("({buffer_name}[{word_offset}] << {bit_word_offset}) & (0xFFFFFFFF >> (32 - {size}))")
+                                    } else if bit_word_offset + size < 32 {
+                                        let upper_word_offset = word_offset + 1;
+                                        let upper_word_bit_offset = (bit_word_offset + size) - 32;
+                                        format!("(uint64_t)({buffer_name}[{word_offset}] << {bit_word_offset}) | ((uint64_t)({buffer_name}[{upper_word_offset}] & (0xFFFFFFFF >> (32 - {upper_word_bit_offset}))) << 32")
+                                    } else {
+                                        panic!();
+                                    };
+                                    let val = match signal_type {
+                                        config::SignalType::UnsignedInt { size: _ } => {
+                                            format!("{val_bits}")
+                                        }
+                                        config::SignalType::SignedInt { size: _ } => {
+                                            format!("{val_bits}")
+                                        }
+                                        config::SignalType::Decimal {
+                                            size: _,
+                                            offset,
+                                            scale,
+                                        } => format!("({val_bits}) * {scale} + {offset}"),
+                                    };
+                                    write_logic.push_str(&format!("{indent}{var} = {val};\n"));
+                                }
+                                Type::Struct {
+                                    name: _,
+                                    description: _,
+                                    attribs,
+                                    visibility: _,
+                                } => {
+                                    for (attrib_name, attrib_ty) in attribs {
+                                        generate_write_logic(
+                                            write_logic,
+                                            attrib_ty,
+                                            bit_offset,
+                                            buffer_name,
+                                            &format!("{var}.{attrib_name}"),
+                                            indent,
+                                        )
+                                    }
+                                }
+                                Type::Enum {
+                                    name,
+                                    description : _,
+                                    size,
+                                    entries : _,
+                                    visibility : _,
+                                } => {
+                                    let size = *size as usize;
+                                    let bit_word_offset = *bit_offset % 32;
+                                    let word_offset = *bit_offset / 32;
+                                    let val_bits = if bit_word_offset == 0 && size <= 32 {
+                                        format!("({buffer_name}[{word_offset}] & (0xFFFFFFFF >> (32 - {size})))")
+                                    } else if bit_word_offset == 0 && size > 32 {
+                                        assert!(size <= 64);
+                                        let upper_word_offset = word_offset + 1;
+                                        let upper_word_bit_offset = (bit_word_offset + size) % 32;
+                                        format!("(uint64_t){buffer_name}[{word_offset}] | (((uint64_t)({buffer_name}[{upper_word_offset}] & (0xFFFFFFFF >> (32 - {upper_word_bit_offset})))) << 32)")
+                                    } else if bit_word_offset + size <= 32 {
+                                        format!("({buffer_name}[{word_offset}] << {bit_word_offset}) & (0xFFFFFFFF >> (32 - {size}))")
+                                    } else if bit_word_offset + size < 32 {
+                                        let upper_word_offset = word_offset + 1;
+                                        let upper_word_bit_offset = (bit_word_offset + size) % 32;
+                                        format!("(uint64_t)({buffer_name}[{word_offset}] << {bit_word_offset}) | ((uint64_t)({buffer_name}[{upper_word_offset}] & (0xFFFFFFFF >> (32 - {upper_word_bit_offset}))) << 32)")
+                                    } else {
+                                        panic!();
+                                    };
+                                    let val = format!("(({name}){val_bits})");
+                                    write_logic.push_str(&format!("{indent}{var} = {val};\n"));
+                                }
+                                Type::Array { len : _, ty : _ } => todo!(),
+                            }
+                        }
+                        generate_write_logic(
+                            &mut write_logic,
+                            object_entry.ty(),
+                            &mut 0,
+                            &buffer_name,
+                            &oe_var,
+                            &indent2,
+                        );
+
+                        case_logic.push_str(&format!(
+                            "{indent}case {od_index} : {{
+{indent2}if (msg.header.sof == 1) {{
+{indent3}if (msg.header.toggle == 0 || msg.header.eof != 0) {{
+{indent4}return;
+{indent3}}}
+{indent3}{buffer_offset} = 0;
+{indent2}}}else {{
+{indent3}{buffer_offset} += 1;
+{indent3}if ({buffer_offset} >= {word_size}) {{
+{indent4}return;
+{indent3}}}
+{indent2}}}
+{indent2}{buffer_name}[{buffer_offset}] = msg.data;
+{indent2}if (msg.header.eof == 0) {{
+{indent3}return;
+{indent2}}}
+{write_logic}
+{indent2}break;
+{indent}}}
+"
+                        ));
+                    }
+                }
+                case_logic.push_str(&format!("{indent}default:\n{indent2}return;\n{indent}}}"));
+                let resp_bus_id = network_config.set_resp_message().bus().id();
+                let logic = format!(
+                    "{indent}if (msg.header.server_id != {node_id}) {{
+{indent2}return;
+{indent}}}
+{indent}{namespace}_message_set_resp resp;
+{case_logic}
+{indent}resp.header.od_index = msg.header.od_index;
+{indent}resp.header.client_id = msg.header.client_id;
+{indent}resp.header.server_id = msg.header.server_id;
+{indent}resp.header.erno = set_resp_erno_Success;
+{indent}canzero_frame resp_frame;
+{indent}{namespace}_serialize_{namespace}_message_set_resp(&resp, &resp_frame);
+{indent}{namespace}_can{resp_bus_id}_send(&resp_frame);\n
+"
+                );
+
+                (logic, false)
+            }
             message::MessageUsage::External { interval: _ } => ("".to_owned(), true),
         };
 
@@ -463,8 +723,8 @@ static uint32_t {buffer_offset} = 0;\n",
 
         let handler_def = format!(
             "{attributes} void {handler_name}({frame_type_name}* frame) {{
-{indent}{msg_name} msg;
-{indent}deserialize_{msg_name}(frame->data, &msg);
+{indent}{namespace}_message_{msg_name} msg;
+{indent}{namespace}_deserialize_{namespace}_message_{msg_name}(frame, &msg);
 {logic}}}\n"
         );
         source.push_str(&handler_def);
@@ -496,46 +756,5 @@ fn ty_size(ty: &Type) -> usize {
             visibility: _,
         } => *size as usize,
         Type::Array { len, ty } => *len * ty_size(ty),
-    }
-}
-
-fn ty_to_c_ty(ty: &Type) -> String {
-    match ty as &Type {
-        config::Type::Primitive(prim) => match prim {
-            config::SignalType::UnsignedInt { size } => {
-                let s = (2 as u64).pow((*size as f64).log2().ceil().max(3.0) as u32);
-                format!("uint{s}_t")
-            }
-            config::SignalType::SignedInt { size } => {
-                let s = (2 as u64).pow((*size as f64).log2().ceil().max(3.0) as u32);
-                format!("int{s}_t")
-            }
-            config::SignalType::Decimal {
-                size,
-                offset: _,
-                scale: _,
-            } => {
-                let s = (2 as u64).pow((*size as f64).log2().ceil().max(3.0) as u32);
-                if s <= 32 {
-                    "float".to_owned()
-                } else {
-                    "double".to_owned()
-                }
-            }
-        },
-        config::Type::Struct {
-            name,
-            description: _,
-            attribs: _,
-            visibility: _,
-        } => name.clone(),
-        config::Type::Enum {
-            name,
-            description: _,
-            size: _,
-            entries: _,
-            visibility: _,
-        } => name.clone(),
-        config::Type::Array { len: _, ty: _ } => todo!(),
     }
 }

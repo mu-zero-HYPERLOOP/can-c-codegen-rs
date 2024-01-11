@@ -24,14 +24,14 @@ pub fn generate_object_entries(
         source.push_str(&var_def);
 
         let getter_name = format!("{namespace}_get_{oe_name}");
-        let mut getter_def = format!("inline {type_name} {getter_name}() {{\n");
+        let mut getter_def = format!("static inline {type_name} {getter_name}() {{\n");
         getter_def.push_str(&format!("{indent}extern {type_name} {oe_var};\n"));
         getter_def.push_str(&format!("{indent}return {oe_var};\n"));
         getter_def.push_str("}\n");
         header.push_str(&getter_def);
 
         let setter_name = format!("{namespace}_set_{oe_name}");
-        let mut setter_def = format!("inline void {setter_name}({type_name} value){{\n");
+        let mut setter_def = format!("static inline void {setter_name}({type_name} value){{\n");
         setter_def.push_str(&format!("{indent}extern {type_name} {oe_var};\n"));
         setter_def.push_str(&format!("{indent}{oe_var} = value;\n"));
         setter_def.push_str("}\n");

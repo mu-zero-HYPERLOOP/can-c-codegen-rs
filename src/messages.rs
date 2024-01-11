@@ -1,8 +1,8 @@
 use can_config_rs::config::{self, MessageRef, SignalType, Type, TypeSignalEncoding};
 
 use crate::errors::Result;
-use crate::types::to_c_type_name;
 use crate::options::Options;
+use crate::types::to_c_type_name;
 
 pub fn generate_messages(
     tx_messages: &Vec<MessageRef>,
@@ -17,23 +17,12 @@ pub fn generate_messages(
         indent.push(' ');
     }
 
-    // let mut all_messages = tx_messages.clone();
-    // all_messages.append(&mut rx_messages.clone());
-    //
-    //
-    
-
-    // create a unique set of all messages!
-    let mut unique_set = tx_messages.clone();
-    for rx_message in rx_messages {
-        if !unique_set.iter().any(|m| m.name() == rx_message.name()) {
-            unique_set.push(rx_message.clone());
-        }
-    }
+    let mut all_messages = tx_messages.clone();
+    all_messages.append(&mut rx_messages.clone());
 
     // create structs for all messages
-    for message in &unique_set {
-        let message_type_name = message.name();
+    for message in &all_messages {
+        let message_type_name = format!("{namespace}_message_{}", message.name());
         // type declartion of the message struct!
         let mut type_def = format!("typedef struct {{\n");
         match message.encoding() {
@@ -55,257 +44,472 @@ pub fn generate_messages(
 
         type_def.push_str(&format!("}} {message_type_name};\n"));
         header.push_str(&type_def);
+    }
+    // serialize message
+    for message in &all_messages {
+        let message_type_name = format!("{namespace}_message_{}", message.name());
+        let id = match message.id() {
+            config::MessageId::StandardId(id) => format!("0x{id:X}"),
+            config::MessageId::ExtendedId(id) => {
+                format!("(0x{id:X} | {}_FRAME_IDE_BIT)", namespace.to_uppercase())
+            }
+        };
+        let dlc = message.dlc();
+        // function to serialize the message struct into a can frame!
+        let serialize_func_name = format!("serialize_{message_type_name}");
+        let mut serialize_def = format!(
+"static void {namespace}_{serialize_func_name}({message_type_name}* msg, {namespace}_frame* frame) {{
+{indent}uint8_t* data = frame->data;
+{indent}frame->id = {id};
+{indent}frame->dlc = {dlc};
+");
 
-        if tx_messages.iter().any(|m| m.name() == message.name()) {
-            // function to serialize the message struct into a can frame!
-            let serialize_func_name = format!("serialize_{message_type_name}");
-            let mut serialize_def = format!(
-                "static void {namespace}_{serialize_func_name}({message_type_name}* msg, uint8_t* data) {{\n"
-            );
-
-            match message.encoding() {
-                Some(encoding) => {
-                    fn write_attribute_parse_code(
-                        serialized_def: &mut String,
-                        attrib: &TypeSignalEncoding,
-                        indent: &str,
-                        attribute_prefix: &str,
-                    ) {
-                        match attrib {
-                            TypeSignalEncoding::Composite(composite) => {
-                                let attrib_name = composite.name();
-                                let attrib_prefix = format!("{attribute_prefix}{attrib_name}.");
-                                for attrib in composite.attributes() {
-                                    write_attribute_parse_code(serialized_def, attrib, indent, &attrib_prefix);
-                                }
+        match message.encoding() {
+            Some(encoding) => {
+                fn write_attribute_parse_code(
+                    serialized_def: &mut String,
+                    attrib: &TypeSignalEncoding,
+                    indent: &str,
+                    attribute_prefix: &str,
+                    attrib_offset: &mut usize,
+                ) {
+                    match attrib {
+                        TypeSignalEncoding::Composite(composite) => {
+                            let attrib_name = composite.name();
+                            let attrib_prefix = format!("{attribute_prefix}{attrib_name}.");
+                            for attrib in composite.attributes() {
+                                write_attribute_parse_code(
+                                    serialized_def,
+                                    attrib,
+                                    indent,
+                                    &attrib_prefix,
+                                    attrib_offset,
+                                );
                             }
-                            TypeSignalEncoding::Primitive(primitive) => {
-                                let attrib_name = primitive.name();
-                                let signal = primitive.signal();
-                                match attrib.ty() as &Type {
-                                    config::Type::Primitive(signal_type) => {
-                                        let var = match signal_type {
-                                            SignalType::UnsignedInt { size: _ } => {
-                                                format!("{attribute_prefix}{attrib_name}")
-                                            }
-                                            SignalType::SignedInt { size: _ } => {
-                                                format!("{attribute_prefix}{attrib_name}")
-                                            }
-                                            SignalType::Decimal {
-                                                size,
-                                                offset,
-                                                scale,
-                                            } => {
-                                                if *size <= 32 {
-                                                    format!("(uint32_t)({attribute_prefix}{attrib_name} * {scale} + {offset})")
-                                                }else {
-                                                    format!("(uint64_t)({attribute_prefix}{attrib_name} * {scale} + {offset})")
+                        }
+                        TypeSignalEncoding::Primitive(primitive) => {
+                            let attrib_name = primitive.name();
+                            let signal = primitive.signal();
+                            match attrib.ty() as &Type {
+                                config::Type::Primitive(signal_type) => {
+                                    let var = match signal_type {
+                                        SignalType::UnsignedInt { size: _ } => {
+                                            format!("{attribute_prefix}{attrib_name}")
+                                        }
+                                        SignalType::SignedInt { size: _ } => {
+                                            format!("{attribute_prefix}{attrib_name}")
+                                        }
+                                        SignalType::Decimal {
+                                            size,
+                                            offset,
+                                            scale,
+                                        } => {
+                                            if *size <= 32 {
+                                                serialized_def.push_str(&format!("{indent}float {attrib_name}_{attrib_offset} = ({attribute_prefix}{attrib_name} - {offset}) / {scale};\n"));
+                                                let ulimit = (0xFFFFFFFF as u32)
+                                                    .overflowing_shl(32 - *size as u32).0;
+                                                let mut limit = ulimit as f32;
+                                                for offset in 0..u32::MAX {
+                                                    let flimit : f32 = (ulimit - offset) as f32;
+                                                    if flimit <= ulimit as f32 {
+                                                        limit = flimit;
+                                                        break;
+                                                    }
                                                 }
+                                                serialized_def.push_str(&format!(
+"{indent}if ({attrib_name}_{attrib_offset} > {limit:.3}) {{
+{indent}{indent}{attrib_name}_{attrib_offset} = {limit:.3};
+{indent}}}
+"));
+                                                format!("(uint32_t) {attrib_name}_{attrib_offset}")
+                                            } else {
+                                                serialized_def.push_str(&format!("{indent}double {attrib_name}_{attrib_offset} = (({attribute_prefix}{attrib_name} - {offset}) / {scale});\n"));
+                                                let ulimit = (0xFFFFFFFFFFFFFFFF as u64)
+                                                    .overflowing_shl(64 - *size as u32).0;
+                                                let mut limit = ulimit as f64;
+                                                for offset in 0..u64::MAX {
+                                                    let flimit : f64 = (ulimit - offset) as f64;
+                                                    if flimit < ulimit as f64 {
+                                                        limit = flimit;
+                                                        break;
+                                                    }
+                                                }
+                                                println!("limit {limit:3}");
+                                                serialized_def.push_str(&format!(
+"{indent}if ({attrib_name}_{attrib_offset} > {limit:.3}) {{
+{indent}{indent}{attrib_name}_{attrib_offset} = {limit:.3};
+{indent}}}
+"));
+                                                format!("(uint64_t) {attrib_name}_{attrib_offset}")
                                             }
-                                        };
-                                        let bit_write_code = bit_write_code(
-                                            signal.byte_offset(),
-                                            signal_type.size() as usize,
-                                            "data",
-                                            &var,
-                                        );
-                                        serialized_def
-                                            .push_str(&format!("{indent}{bit_write_code};\n"));
-                                    }
-                                    config::Type::Struct {
-                                        name: _,
-                                        description: _,
-                                        attribs : _,
-                                        visibility: _,
-                                    } => panic!("structs are not primitive"),
-                                    config::Type::Enum {
-                                        name: _,
-                                        description: _,
-                                        size,
-                                        entries: _,
-                                        visibility: _,
-                                    } => {
-                                        let bit_write_code = bit_write_code(
-                                            signal.byte_offset(),
-                                            *size as usize,
-                                            "data",
-                                            &format!("({attribute_prefix}{attrib_name})"),
-                                        );
-                                        serialized_def
-                                            .push_str(&format!("{indent}{bit_write_code};\n"));
-                                    }
-                                    config::Type::Array { len: _, ty: _ } => todo!(),
-                                };
-                            }
-                        }
-                    }
+                                        }
+                                    };
+                                    let size = signal_type.size();
+                                    let val = if size < 8 {
+                                        format!("(uint8_t)({var} & (0xFF >> (8 - {size})))")
+                                    } else if size == 8 {
+                                        format!("{var}")
+                                    } else if size < 16 {
+                                        format!("(uint16_t)({var} & (0xFFFF >> (16 - {size})))")
+                                    } else if size == 16 {
+                                        format!("{var}")
+                                    } else if size < 32 {
+                                        format!("(uint32_t)({var} & (0xFFFFFFFF >> (32 - {size})))")
+                                    } else if size == 32 {
+                                        format!("{var}")
+                                    } else if size < 64 {
+                                        format!("(uint64_t)({var} & (0xFFFFFFFFFFFFFFFF >> (64 - {size})))")
+                                    } else if size == 64 {
+                                        format!("{var}")
+                                    } else {
+                                        panic!("primitive data types larger than 64 bit are not supported");
+                                    };
 
-                    for attrib in encoding.attributes() {
-                        write_attribute_parse_code(
-                            &mut serialize_def,
-                            attrib,
-                            &indent,
-                            "msg->",
-                        );
-                    }
-                }
-                None => {
-                    for signal in message.signals() {
-                        let signal_name = signal.name();
-                        let var = match signal.ty() {
-                            SignalType::UnsignedInt { size: _ } => {
-                                format!("msg->{signal_name}")
-                            }
-                            SignalType::SignedInt { size: _ } => {
-                                format!("msg->{signal_name}")
-                            }
-                            SignalType::Decimal {
-                                size: _,
-                                offset,
-                                scale,
-                            } => {
-                                let inv_scale = 1.0 / *scale;
-                                format!("(msg->{signal_name} * {inv_scale} + {offset})")
-                            }
-                        };
-                        let bit_write_code = bit_write_code(
-                            signal.byte_offset(),
-                            signal.size() as usize,
-                            "data",
-                            &var,
-                        );
-
-                        serialize_def.push_str(&format!("{indent}{bit_write_code};"));
-                    }
-                }
-            };
-
-            serialize_def.push_str("}\n");
-            header.push_str(&serialize_def);
-        }
-
-        if rx_messages.iter().any(|m| m.name() == message.name()) {
-            // function to serialize the message struct into a can frame!
-            let deserialize_func_name = format!("deserialize_{message_type_name}");
-            let mut deserialize_def = format!(
-                "static void {deserialize_func_name}(uint8_t* data, {message_type_name}* msg) {{\n"
-            );
-
-            match message.encoding() {
-                Some(encoding) => {
-                    fn write_attribute_write_code(
-                        deserialized_def: &mut String,
-                        attrib: &TypeSignalEncoding,
-                        indent: &str,
-                        attribute_prefix: &str,
-                    ) {
-                        match attrib {
-                            TypeSignalEncoding::Composite(composite) => {
-                                let attrib_name = composite.name();
-                                let attrib_prefix = format!("{attribute_prefix}{attrib_name}.");
-                                for attrib in composite.attributes() {
-                                    write_attribute_write_code(deserialized_def, attrib, indent, &attrib_prefix);
+                                    let word_bit_offset = *attrib_offset % 32;
+                                    let write_logic = if word_bit_offset == 0 && size <= 32 {
+                                        // word aligned word write
+                                        // is asserted to be the first write to the word!
+                                        let word_offset = *attrib_offset / 32; // intentional floor
+                                        format!(
+                                            "{indent}((uint32_t*)data)[{word_offset}] = {val};\n"
+                                        )
+                                    } else if word_bit_offset == 0 && size > 32 {
+                                        // long word aligned long wrd write
+                                        // is asserted to be the first bit of the data frame
+                                        assert!(*attrib_offset == 0);
+                                        format!("{indent}((uint64_t*)data)[0] = {val};\n")
+                                    } else if word_bit_offset + size as usize <= 32 {
+                                        // unaligned word write (does't cross word boundary)
+                                        // is asserted to not be the first write to the word!
+                                        let word_offset = *attrib_offset / 32; // intentional floor
+                                        format!("{indent}((uint32_t*)data)[{word_offset}] |= {val} << {word_bit_offset};\n")
+                                    } else if word_bit_offset + size as usize >= 32 {
+                                        // unaligned long word write (crosses word boundary)
+                                        // is asserted to not be the first write to the word!
+                                        assert!(*attrib_offset <= 32);
+                                        format!("{indent}((uint64_t*)data)[0] |= ((uint64_t){val}) << {word_bit_offset} ;\n")
+                                    } else {
+                                        panic!();
+                                    };
+                                    serialized_def.push_str(&write_logic);
+                                    *attrib_offset += size as usize;
                                 }
-                            }
-                            TypeSignalEncoding::Primitive(primitive) => {
-                                let attrib_name = primitive.name();
-                                let signal = primitive.signal();
-                                match attrib.ty() as &Type {
-                                    config::Type::Primitive(signal_type) => {
-                                        let var = match signal_type {
-                                            SignalType::UnsignedInt { size: _ } => {
-                                                format!("{attribute_prefix}{attrib_name}")
-                                            }
-                                            SignalType::SignedInt { size: _ } => {
-                                                format!("{attribute_prefix}{attrib_name}")
-                                            }
-                                            SignalType::Decimal {
-                                                size: _,
-                                                offset,
-                                                scale,
-                                            } => {
-                                                format!("({attribute_prefix}{attrib_name} * {scale} + {offset})")
-                                            }
-                                        };
-                                        let bit_write_code = bit_access_code(
-                                            signal.byte_offset(),
-                                            signal_type.size() as usize,
-                                            "data",
-                                        );
+                                config::Type::Enum {
+                                    name: _,
+                                    description: _,
+                                    size,
+                                    entries: _,
+                                    visibility: _,
+                                } => {
+                                    let var = format!("{attribute_prefix}{attrib_name}");
+                                    let size = *size;
+                                    let val = if size < 8 {
+                                        format!("(uint8_t)({var} & (0xFF >> (8 - {size})))")
+                                    } else if size == 8 {
+                                        format!("(uint8_t){var}")
+                                    } else if size < 16 {
+                                        format!("(uint16_t)({var} & (0xFFFF >> (16 - {size})))")
+                                    } else if size == 16 {
+                                        format!("(uint16_t){var}")
+                                    } else if size < 32 {
+                                        format!("(uint32_t)({var} & (0xFFFFFFFF >> (32 - {size})))")
+                                    } else if size == 32 {
+                                        format!("(uint32_t){var}")
+                                    } else if size < 64 {
+                                        format!("(uint64_t)({var} & (0xFFFFFFFFFFFFFFFF >> (64 - {size})))")
+                                    } else if size == 64 {
+                                        format!("(uint64_t){var}")
+                                    } else {
+                                        panic!("primitive data types larger than 64 bit are not supported");
+                                    };
 
-                                        deserialized_def
-                                            .push_str(&format!("{indent}{var} = {bit_write_code};\n"));
-                                    }
-                                    config::Type::Struct {
-                                        name: _,
-                                        description: _,
-                                        attribs : _,
-                                        visibility: _,
-                                    } => panic!("structs are not primitive"),
-                                    config::Type::Enum {
-                                        name: _,
-                                        description: _,
-                                        size,
-                                        entries: _,
-                                        visibility: _,
-                                    } => {
-                                        let bit_write_code = bit_access_code(
-                                            signal.byte_offset(),
-                                            *size as usize,
-                                            "data"
-                                        );
-
-                                        deserialized_def
-                                            .push_str(&format!("{indent}{attribute_prefix}{attrib_name} = {bit_write_code};\n"));
-                                    }
-                                    config::Type::Array { len: _, ty: _ } => todo!(),
-                                };
-                            }
+                                    let word_bit_offset = *attrib_offset % 32;
+                                    let write_logic = if word_bit_offset == 0 && size <= 32 {
+                                        // word aligned word write
+                                        // is asserted to be the first write to the word!
+                                        let word_offset = *attrib_offset / 32; // intentional floor
+                                        format!(
+                                            "{indent}((uint32_t*)data)[{word_offset}] = {val};\n"
+                                        )
+                                    } else if word_bit_offset == 0 && size > 32 {
+                                        // long word aligned long wrd write
+                                        // is asserted to be the first bit of the data frame
+                                        assert!(*attrib_offset == 0);
+                                        format!("{indent}((uint64_t*)data)[0] = {val};\n")
+                                    } else if word_bit_offset + size as usize <= 32 {
+                                        // unaligned word write (does't cross word boundary)
+                                        // is asserted to not be the first write to the word!
+                                        let word_offset = *attrib_offset / 32; // intentional floor
+                                        format!("{indent}((uint32_t*)data)[{word_offset}] |= {val} << {word_bit_offset};\n")
+                                    } else if word_bit_offset + size as usize >= 32 {
+                                        // unaligned long word write (crosses word boundary)
+                                        // is asserted to not be the first write to the word!
+                                        assert!(*attrib_offset <= 32);
+                                        format!("{indent}((uint64_t*)data)[0] |= ((uint64_t){val}) << {word_bit_offset} ;\n")
+                                    } else {
+                                        panic!();
+                                    };
+                                    serialized_def.push_str(&write_logic);
+                                    *attrib_offset += size as usize;
+                                }
+                                config::Type::Array { len: _, ty: _ } => todo!(),
+                                config::Type::Struct {
+                                    name: _,
+                                    description: _,
+                                    attribs: _,
+                                    visibility: _,
+                                } => panic!("structs are not primitive"),
+                            };
                         }
                     }
+                }
 
-                    for attrib in encoding.attributes() {
-                        write_attribute_write_code(
-                            &mut deserialize_def,
-                            attrib,
-                            &indent,
-                            "msg->",
-                        );
+                let mut attrib_offset: usize = 0;
+                for attrib in encoding.attributes() {
+                    write_attribute_parse_code(
+                        &mut serialize_def,
+                        attrib,
+                        &indent,
+                        "msg->",
+                        &mut attrib_offset,
+                    );
+                }
+            }
+            None => {
+                for signal in message.signals() {
+                    let attrib_offset: usize = signal.byte_offset();
+                    let signal_name = signal.name();
+                    let var = match signal.ty() {
+                        SignalType::UnsignedInt { size: _ } => {
+                            format!("msg->{signal_name}")
+                        }
+                        SignalType::SignedInt { size: _ } => {
+                            format!("msg->{signal_name}")
+                        }
+                        SignalType::Decimal {
+                            size,
+                            offset,
+                            scale,
+                        } => {
+                            if *size <= 32 {
+                                format!("(uint32_t)(msg->{signal_name} * {scale} + {offset})")
+                            } else {
+                                format!("(uint64_t)(msg->{signal_name} * {scale} + {offset})")
+                            }
+                        }
+                    };
+                    let size = signal.size();
+                    let val = if size < 8 {
+                        format!("(uint8_t)({var} & (0xFF >> (8 - {size})))")
+                    } else if size == 8 {
+                        format!("{var}")
+                    } else if size < 16 {
+                        format!("(uint16_t)({var} & (0xFFFF >> (16 - {size})))")
+                    } else if size == 16 {
+                        format!("{var}")
+                    } else if size < 32 {
+                        format!("(uint32_t)({var} & (0xFFFFFFFF >> (32 - {size})))")
+                    } else if size == 32 {
+                        format!("{var}")
+                    } else if size < 64 {
+                        format!("(uint64_t)({var} & (0xFFFFFFFFFFFFFFFF >> (64 - {size})))")
+                    } else if size == 64 {
+                        format!("{var}")
+                    } else {
+                        panic!("primitive data types larger than 64 bit are not supported");
+                    };
+
+                    let word_bit_offset = attrib_offset % 32;
+                    let write_logic = if word_bit_offset == 0 && size <= 32 {
+                        // word aligned word write
+                        // is asserted to be the first write to the word!
+                        let word_offset = attrib_offset / 32; // intentional floor
+                        format!("{indent}((uint32_t*)data)[{word_offset}] = {val};\n")
+                    } else if word_bit_offset == 0 && size > 32 {
+                        // long word aligned long wrd write
+                        // is asserted to be the first bit of the data frame
+                        assert!(attrib_offset == 0);
+                        format!("{indent}((uint64_t*)data)[0] = {val};\n")
+                    } else if word_bit_offset + size as usize <= 32 {
+                        // unaligned word write (does't cross word boundary)
+                        // is asserted to not be the first write to the word!
+                        let word_offset = attrib_offset / 32; // intentional floor
+                        format!("{indent}((uint32_t*)data)[{word_offset}] |= {val} << {word_bit_offset};\n")
+                    } else if word_bit_offset + size as usize >= 32 {
+                        // unaligned long word write (crosses word boundary)
+                        // is asserted to not be the first write to the word!
+                        assert!(attrib_offset <= 32);
+                        format!("{indent}((uint64_t*)data)[0] |= ((uint64_t){val}) << {word_bit_offset} ;\n")
+                    } else {
+                        panic!();
+                    };
+                    serialize_def.push_str(&write_logic);
+                }
+            }
+        };
+
+        serialize_def.push_str("}\n");
+        header.push_str(&serialize_def);
+    }
+    // deserialize
+    for message in &all_messages {
+        let message_type_name = format!("{namespace}_message_{}", message.name());
+        // function to serialize the message struct into a can frame!
+        let deserialize_func_name = format!("{namespace}_deserialize_{message_type_name}");
+        let mut deserialize_def = format!(
+"static void {deserialize_func_name}({namespace}_frame* frame, {message_type_name}* msg) {{
+{indent}uint8_t* data = frame->data;
+"
+        );
+
+        match message.encoding() {
+            Some(encoding) => {
+                fn write_attribute_write_code(
+                    deserialized_def: &mut String,
+                    attrib: &TypeSignalEncoding,
+                    indent: &str,
+                    attribute_prefix: &str,
+                    attrib_bit_offset: &mut usize,
+                ) {
+                    match attrib {
+                        TypeSignalEncoding::Composite(composite) => {
+                            let attrib_name = composite.name();
+                            let attrib_prefix = format!("{attribute_prefix}{attrib_name}.");
+                            for attrib in composite.attributes() {
+                                write_attribute_write_code(
+                                    deserialized_def,
+                                    attrib,
+                                    indent,
+                                    &attrib_prefix,
+                                    attrib_bit_offset,
+                                );
+                            }
+                        }
+                        TypeSignalEncoding::Primitive(primitive) => {
+                            let attrib_name = primitive.name();
+                            let signal = primitive.signal();
+                            match attrib.ty() as &Type {
+                                config::Type::Primitive(signal_type) => {
+                                    let var = format!("{indent}{attribute_prefix}{attrib_name}");
+                                    let size = signal_type.size() as usize;
+
+                                    let word_bit_offset = *attrib_bit_offset % 32;
+                                    assert_eq!(*attrib_bit_offset, signal.byte_offset());
+                                    let val_bits = if word_bit_offset == 0 && size <= 32 {
+                                        let word_offset = *attrib_bit_offset / 32;
+                                        format!("((uint32_t*)data)[{word_offset}] & (0xFFFFFFFF >> (32 - {size}))")
+                                    } else if word_bit_offset == 0 && size > 32 {
+                                        format!("((uint64_t*)data)[0] & (0xFFFFFFFFFFFFFFFF >> (64 - {size}))")
+                                    } else if word_bit_offset + size <= 32 {
+                                        let word_offset = *attrib_bit_offset / 32; //intentional floor
+                                        format!("(((uint32_t*)data)[{word_offset}] >> {word_bit_offset}) & (0xFFFFFFFF >> (32 - {size}))")
+                                    } else if word_bit_offset + size > 32 {
+                                        format!("(((uint64_t*)data)[0] >> {attrib_bit_offset}) & (0xFFFFFFFFFFFFFFFF >> (64 - {size}))")
+                                    } else {
+                                        panic!();
+                                    };
+
+                                    let val = match signal_type {
+                                        SignalType::UnsignedInt { size: _ } => {
+                                            format!("({val_bits})")
+                                        }
+                                        SignalType::SignedInt { size: _ } => {
+                                            format!("({val_bits})")
+                                        }
+                                        SignalType::Decimal {
+                                            size: _,
+                                            offset,
+                                            scale,
+                                        } => {
+                                            format!("({val_bits}) * {scale} + {offset}")
+                                        }
+                                    };
+
+                                    deserialized_def.push_str(&format!("{var} = {val};\n"));
+                                    *attrib_bit_offset += size;
+                                }
+                                config::Type::Struct {
+                                    name: _,
+                                    description: _,
+                                    attribs: _,
+                                    visibility: _,
+                                } => panic!("structs are not primitive"),
+                                config::Type::Enum {
+                                    name,
+                                    description: _,
+                                    size,
+                                    entries: _,
+                                    visibility: _,
+                                } => {
+                                    let var = format!("{indent}{attribute_prefix}{attrib_name}");
+                                    let size = *size as usize;
+
+                                    let word_bit_offset = *attrib_bit_offset % 32;
+                                    assert_eq!(*attrib_bit_offset, signal.byte_offset());
+                                    let val_bits = if word_bit_offset == 0 && size <= 32 {
+                                        let word_offset = *attrib_bit_offset / 32;
+                                        format!("((uint32_t*)data)[{word_offset}] & (0xFFFFFFFF >> (32 - {size}))")
+                                    } else if word_bit_offset == 0 && size > 32 {
+                                        format!("((uint64_t*)data)[0] & (0xFFFFFFFFFFFFFFFF >> (64 - {size}))")
+                                    } else if word_bit_offset + size <= 32 {
+                                        let word_offset = *attrib_bit_offset / 32; //intentional floor
+                                        format!("(((uint32_t*)data)[{word_offset}] << {word_bit_offset}) & (0xFFFFFFFF >> (32 - {size}))")
+                                    } else if word_bit_offset + size > 32 {
+                                        format!("(((uint64_t*)data)[0] << {attrib_bit_offset}) & (0xFFFFFFFFFFFFFFFF >> (64 - {size}))")
+                                    } else {
+                                        panic!();
+                                    };
+
+                                    let val = format!("({name})({val_bits})");
+
+                                    deserialized_def.push_str(&format!("{var} = {val};\n"));
+                                    *attrib_bit_offset += size;
+                                }
+                                config::Type::Array { len: _, ty: _ } => todo!(),
+                            };
+                        }
                     }
                 }
-                None => {
-                    for signal in message.signals() {
-                        let signal_name = signal.name();
-                        let var = match signal.ty() {
-                            SignalType::UnsignedInt { size: _ } => {
-                                format!("msg->{signal_name}")
-                            }
-                            SignalType::SignedInt { size: _ } => {
-                                format!("msg->{signal_name}")
-                            }
-                            SignalType::Decimal {
-                                size: _,
-                                offset,
-                                scale,
-                            } => {
-                                format!("(msg->{signal_name} * {scale} + {offset})")
-                            }
-                        };
-                        let bit_write_code = bit_access_code(
-                            signal.byte_offset(),
-                            signal.size() as usize,
-                            "data",
-                        );
 
-
-                        deserialize_def.push_str(&format!("{indent}{var} = {bit_write_code};"));
-                    }
+                let mut attrib_offset: usize = 0;
+                for attrib in encoding.attributes() {
+                    write_attribute_write_code(
+                        &mut deserialize_def,
+                        attrib,
+                        &indent,
+                        "msg->",
+                        &mut attrib_offset,
+                    );
                 }
-            };
+            }
+            None => {
+                for signal in message.signals() {
+                    let signal_name = signal.name();
+                    let var = match signal.ty() {
+                        SignalType::UnsignedInt { size: _ } => {
+                            format!("msg->{signal_name}")
+                        }
+                        SignalType::SignedInt { size: _ } => {
+                            format!("msg->{signal_name}")
+                        }
+                        SignalType::Decimal {
+                            size: _,
+                            offset,
+                            scale,
+                        } => {
+                            format!("(msg->{signal_name} * {scale} + {offset})")
+                        }
+                    };
+                    let bit_write_code =
+                        bit_access_code(signal.byte_offset(), signal.size() as usize, "data");
 
-            deserialize_def.push_str("}\n");
-            source.push_str(&deserialize_def);
-        }
+                    deserialize_def.push_str(&format!("{indent}{var} = {bit_write_code};"));
+                }
+            }
+        };
+
+        deserialize_def.push_str("}\n");
+        header.push_str(&deserialize_def);
     }
 
     Ok(())
@@ -314,7 +518,7 @@ pub fn generate_messages(
 pub fn signal_type_to_c_type(signal_type: &SignalType) -> &str {
     match signal_type {
         config::SignalType::UnsignedInt { size } => {
-            let bit_count = (*size as f64).log2().ceil() as usize;
+            let bit_count = *size;
             if bit_count <= 8 {
                 "uint8_t"
             } else if bit_count <= 16 {
@@ -328,7 +532,7 @@ pub fn signal_type_to_c_type(signal_type: &SignalType) -> &str {
             }
         }
         config::SignalType::SignedInt { size } => {
-            let bit_count = (*size as f64).log2().ceil() as usize;
+            let bit_count = *size;
             if bit_count <= 8 {
                 "int8_t"
             } else if bit_count <= 16 {
@@ -365,11 +569,11 @@ fn bit_access_code(bit_offset: usize, bit_size: usize, buffer_name: &str) -> Str
         format!("(((int32_t*){buffer_name})[{word_index}] & 0x{mask:X}) >> {shift}")
     } else {
         let mask = (0xFFFFFFFFFFFFFFFF as u64)
-            .overflowing_shl(32 - bit_size as u32)
+            .overflowing_shl((32 as usize).saturating_sub(bit_size) as u32)
             .0
             >> bit_offset;
         let shift = bit_offset;
-        format!("(((int64_t*){buffer_name}) & 0x{mask:X}) >> {shift}")
+        format!("(*((int64_t*){buffer_name}) & 0x{mask:X}) >> {shift}")
     }
 }
 
