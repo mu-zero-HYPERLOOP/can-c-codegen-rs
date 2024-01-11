@@ -82,8 +82,8 @@ void canzero_request_update(uint32_t time) {
 static void *update_loop(void *_) {
   while (running) {
     uint32_t timeout = next_update - time_now_ms();
-    for (uint32_t i = 0; i < timeout; i++) {
-      usleep(1000);
+    for (uint32_t i = 0; i < timeout * 1000; i++) {
+      usleep(1);
       uint32_t now = time_now_ms();
       if (now >= next_update)
         break;
@@ -110,6 +110,7 @@ static void *test_func(void *args) {
   get_req.header.od_index = 6;
   get_req.header.client_id = 2;
   get_req.header.server_id = 0;
+  canzero_set_position(10);
 
   canzero_serialize_canzero_message_get_req(&get_req, &get_req_frame);
 
@@ -119,9 +120,9 @@ static void *test_func(void *args) {
 
   canzero_message_secu_stream_position_and_velocity position_msg;
   canzero_frame position_frame;
-  position_msg.position = 69;
-  canzero_deserialize_canzero_message_secu_stream_position_and_velocity(
-      &position_frame, &position_msg);
+  position_msg.position = 10;
+  canzero_serialize_canzero_message_secu_stream_position_and_velocity(
+      &position_msg, &position_frame);
   uint32_t first_segment = ((uint32_t *)position_frame.data)[0];
   uint32_t second_segment = ((uint32_t *)position_frame.data)[1];
 
@@ -142,6 +143,9 @@ static void *test_func(void *args) {
   set_req.header.sof = 0;
   set_req.header.toggle = 0;
   set_req.header.eof = 1;
+  set_req.header.od_index = 6;
+  set_req.header.client_id = 2;
+  set_req.header.server_id = 0;
   canzero_serialize_canzero_message_set_req(&set_req, &set_req_frame);
   mock_recv_frame(&set_req_frame);
 

@@ -1,6 +1,6 @@
 workspace = { members = ["testing/testing_cli"] }
 [package]
-name = "can-cpp-codegen-rs"
+name = "can-c-codegen-rs"
 version = "0.1.0"
 edition = "2021"
 
