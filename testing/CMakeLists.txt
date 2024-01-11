@@ -30,6 +30,18 @@ add_custom_command(
   DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/canzero
 )
 
+
+include(FetchContent)
+
+FetchContent_Declare(
+  can-socketcan-platform
+  GIT_REPOSITORY https://github.com/mu-zero-HYPERLOOP/can-socketcan-platform
+  GIT_TAG origin/main
+)
+
+FetchContent_MakeAvailable(can-socketcan-platform)
+
 add_executable(${PROJECT_NAME} src/main.c ${CMAKE_CURRENT_BINARY_DIR}/canzero/canzero.c)
+target_link_libraries(${PROJECT_NAME} PRIVATE can-socketcan-platform)
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_BINARY_DIR}/canzero/)
 

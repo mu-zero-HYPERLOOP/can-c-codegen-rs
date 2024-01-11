@@ -87,20 +87,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f30e7476521f6f8af1a1c4c0b8cc94f0bee37d91763d0ca2665f299b6cd8aec"
 
 [[package]]
+name = "can-c-codegen-rs"
+version = "0.1.0"
+dependencies = [
+ "can-config-rs",
+]
+
+[[package]]
 name = "can-config-rs"
 version = "0.1.0"
 source = "git+https://github.com/mu-zero-HYPERLOOP/can-config-rs.git#1ed9bc813f9f4b6e6f4213911f1f89312ec3ecd0"
 dependencies = [
  "chrono",
  "regex",
-]
-
-[[package]]
-name = "can-cpp-codegen-rs"
-version = "0.1.0"
-dependencies = [
- "can-config-rs",
- "can-yaml-config-rs",
 ]
 
 [[package]]
@@ -339,7 +338,7 @@ dependencies = [
 name = "testing_cli"
 version = "0.1.0"
 dependencies = [
- "can-cpp-codegen-rs",
+ "can-c-codegen-rs",
  "can-yaml-config-rs",
  "clap",
 ]

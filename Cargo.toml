@@ -8,6 +8,5 @@ edition = "2021"
 
 [dependencies]
 can-config-rs = { git = "https://github.com/mu-zero-HYPERLOOP/can-config-rs.git" }
-can-yaml-config-rs = { git = "https://github.com/mu-zero-HYPERLOOP/can-yaml-config-rs.git" }
 
 [dev.dependencies]
