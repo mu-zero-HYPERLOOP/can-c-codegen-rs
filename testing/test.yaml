@@ -65,58 +65,58 @@ nodes:
         access: global
         description: x acceleration of the pod
         unit: m/s²
-      levitation_state:
+      master_levitation_state:
         type: u8
         access: global
         description: state of the MLUs
-      guidance_state:
+      master_guidance_state:
         type: u8
         access: global
         description: state of the MGU
-      cooling_state:
+      master_cooling_state:
         type: u8
         access: global
         description: state of the cooling system
-      global_state:
+      master_global_state:
         type: u8
         access: global
         descríption: state of the overall pod
 
-    tx_streams:
-      ecu_temperatures:
-        description : Stream of CPU temperatures of the ECU
-        interval : 1s
-        mapping:
-          - cpu_temperature
-          - bcu_temperature
-      pressure_values:
-        description : Pressure values of the pod
-        interval : 100ms
-        mapping:
-          - pressure_sensor_0
-          - pressure_sensor_1
-          - pressure_sensor_2
-          - pressure_sensor_3
-      position_and_velocity:
-        description : Position and velocity values of the pod
-        interval : 20ms
-        mapping:
-          - position
-      acceleration:
-        description: Acceleration of the pods X,Y,Z axis
-        internal: 100ms
-        mapping:
-          - acceleration_x
-          - acceleration_y
-          - acceleration_z
-
-    rx_streams:
-      master:
-        states:
-          levitation_state : levitation_state
-          guidance_state : guidance_state
-          cooling_state : cooling_state
-          global_state : global_state
+    # tx_streams:
+    #   ecu_temperatures:
+    #     description : Stream of CPU temperatures of the ECU
+    #     interval : 10ms
+    #     mapping:
+    #       - cpu_temperature
+    #       - bcu_temperature
+    #   pressure_values:
+    #     description : Pressure values of the pod
+    #     interval : 100ms
+    #     mapping:
+    #       - pressure_sensor_0
+    #       - pressure_sensor_1
+    #       - pressure_sensor_2
+    #       - pressure_sensor_3
+    #   position_and_velocity:
+    #     description : Position and velocity values of the pod
+    #     interval : 20ms
+    #     mapping:
+    #       - position
+    #   acceleration:
+    #     description: Acceleration of the pods X,Y,Z axis
+    #     internal: 100ms
+    #     mapping:
+    #       - acceleration_x
+    #       - acceleration_y
+    #       - acceleration_z
+    
+    # rx_streams:
+    #   master:
+    #     states:
+    #       levitation_state : master_levitation_state
+    #       guidance_state : master_guidance_state
+    #       cooling_state : master_cooling_state
+    #       global_state : master_global_state
         
 
     commands:
@@ -190,13 +190,12 @@ nodes:
           - guidance_state
           - cooling_state
           - global_state
-
-      
-    rx_streams:
-      secu:
-        ecu_temperatures:
-          cpu_temperature : secu_cpu_temperature
-          bcu_temperature : secu_bcu_temperature
+    
+    # rx_streams:
+    #   secu:
+    #     ecu_temperatures:
+    #       cpu_temperature : secu_cpu_temperature
+    #       bcu_temperature : secu_bcu_temperature
 
 
 

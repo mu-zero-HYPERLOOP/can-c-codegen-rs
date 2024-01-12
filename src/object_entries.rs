@@ -16,6 +16,7 @@ pub fn generate_object_entries(
     }
 
     for object_entry in object_entries {
+        println!("oe_name = {}", object_entry.name());
         let type_name = to_c_type_name(object_entry.ty());
         let oe_name = object_entry.name();
         let oe_var = format!("__oe_{oe_name}");

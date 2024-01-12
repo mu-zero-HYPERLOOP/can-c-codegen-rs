@@ -46,9 +46,16 @@ pub fn generate_messages(
                 }
             }
         }
+        let id = match message.id() {
+            config::MessageId::StandardId(id) => format!("0x{id:X}"),
+            config::MessageId::ExtendedId(id) => {
+                format!("(0x{id:X} | {}_FRAME_IDE_BIT)", namespace.to_uppercase())
+            }
+        };
 
         type_def.push_str(&format!("}} {message_type_name};\n"));
         header.push_str(&type_def);
+        header.push_str(&format!("static const uint32_t {message_type_name}_id = {id};\n"));
     }
     // serialize message
     for message in &all_messages {

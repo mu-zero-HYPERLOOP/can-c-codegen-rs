@@ -77,7 +77,7 @@ pub fn generate_rx_handlers(
                     false,
                 )
             }
-            message::MessageUsage::CommandResp(_) => todo!(),
+            message::MessageUsage::CommandResp(_) => ("".to_owned(), false),
             message::MessageUsage::GetResp => panic!(),
             message::MessageUsage::GetReq => {
                 let mut logic = String::new();
