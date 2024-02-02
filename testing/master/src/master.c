@@ -10,10 +10,9 @@
 #include <unistd.h>
 #include "socketcan.h"
 
-/* #define LOGGING */
+#define LOGGING
 
 static socketcan_socket can0_socket;
-static int running = 0;
 
 void canzero_can0_setup(uint32_t baudrate, canzero_can_filter *filters,
                         int filter_count) {
@@ -39,7 +38,7 @@ void canzero_can0_send(canzero_frame *frame) {
   socket_frame.can_id = frame->id;
   socket_frame.len = frame->dlc;
   memcpy(&socket_frame.data, frame->data, sizeof(uint8_t)*8);
-  /* socketcan_send_frame(&can0_socket, &socket_frame); */
+  socketcan_send_frame(&can0_socket, &socket_frame);
   uint32_t now = time_now_ms();
 #ifdef LOGGING
   printf("[%u] master : can0: sending frame [id=%u, dlc=%u, data=%lu]\n", now, frame->id,
@@ -49,11 +48,10 @@ void canzero_can0_send(canzero_frame *frame) {
 }
 
 int canzero_can0_recv(canzero_frame *frame) {
-  if (running == 0)return 0;
   socketcan_frame socket_frame;
   int erno = socketcan_recv_frame(&can0_socket, &socket_frame);
   if (erno) {
-    printf("failed to receive frame");
+    perror("master: receive frame");
     return 0;
   }
   frame->id = socket_frame.can_id;
@@ -63,7 +61,6 @@ int canzero_can0_recv(canzero_frame *frame) {
 #ifdef LOGGING
   printf("[%u] master : can0: receiving frame [id=%u, dlc=%u, data=%lu]\n", now, frame->id,
          frame->dlc, *(uint64_t *)frame->data);
-  fflush(stdout);
 #endif
   return 1;
 }
@@ -74,19 +71,8 @@ static mutex critical_mutex;
 void canzero_enter_critical() { mutex_lock(&critical_mutex); }
 void canzero_exit_critical() { mutex_unlock(&critical_mutex); }
 
-command_resp_erno canzero_configure_temperatures(uint32_t sample_count) {
-  return 0;
-}
-command_resp_erno canzero_test1(uint32_t sample_count) { return 0; }
-command_resp_erno canzero_test2(uint32_t sample_count) { return 0; }
-command_resp_erno canzero_test3(uint32_t sample_count) { return 0; }
-command_resp_erno canzero_test4(uint32_t sample_count) { return 0; }
-command_resp_erno canzero_test5(uint32_t sample_count) { return 0; }
-command_resp_erno canzero_test6(uint32_t sample_count6) { return 0; }
-
-
 static void *can0_rx_loop(void *_) {
-  while (running) {
+  while (1) {
     uint32_t now = time_now_ms();
 #ifdef LOGGING
     printf("[%u] master : can0 : poll\n", now);
@@ -109,7 +95,7 @@ void canzero_request_update(uint32_t time) {
 }
 
 static void *update_loop(void *_) {
-  while (running) {
+  while (1) {
     uint32_t timeout = next_update - time_now_ms();
     for (uint32_t i = 0; i < timeout * 1000; i++) {
       usleep(1);
@@ -128,21 +114,16 @@ void* control_task(void* arg) {
   int pipe_fd = *(int*)arg;
   
   uint32_t command = 0;
-  int bytes = read(pipe_fd, &command, sizeof(uint32_t));
+  while(read(pipe_fd, &command, sizeof(uint32_t)) && command == 0);
 
   return NULL;
 }
 
 int main(int argc, char** argv) {
-  printf("Running master\n");
-  int pipe_fd = atoi(argv[1]);
+  printf("Running secu\n");
   time_init();
   mutex_create(&critical_mutex);
-  running = 1;
   canzero_init();
-
-  thread control_thread;
-  thread_create(&control_thread, control_task, &pipe_fd);
 
   thread can0_tx_thread;
   thread_create(&can0_tx_thread, can0_rx_loop, NULL);
@@ -150,15 +131,11 @@ int main(int argc, char** argv) {
   thread update_thread;
   thread_create(&update_thread, update_loop, NULL);
 
-  thread_join(&control_thread, NULL);
-
-  running = 0;
-
   thread_join(&update_thread, NULL);
 
   thread_join(&can0_tx_thread, NULL);
 
   mutex_free(&critical_mutex);
-
-  printf("master shutdown\n");
+  printf("secu shutdown\n");
+  fflush(stdout);
 }

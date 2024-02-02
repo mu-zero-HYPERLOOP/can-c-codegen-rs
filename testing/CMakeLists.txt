@@ -22,10 +22,10 @@ FetchContent_MakeAvailable(can-socketcan-platform)
 
 add_subdirectory(utility)
 add_subdirectory(secu)
-add_subdirectory(master)
+# add_subdirectory(master)
 
 add_executable(${PROJECT_NAME} src/main.c src/test.c)
-add_dependencies(${PROJECT_NAME} secu master)
+add_dependencies(${PROJECT_NAME} secu)
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/secu/canzero/)
 

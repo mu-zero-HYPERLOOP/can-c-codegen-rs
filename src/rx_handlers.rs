@@ -25,12 +25,18 @@ pub fn generate_rx_handlers(
 
         let (logic, weak) = match message.usage() {
             message::MessageUsage::Stream(stream) => {
+                // NOTE this is the instance of the tx_stream NOT the rx_stream !!! 
+                // pretty bad that there is no difference. Already lead to multiple bugs that 
+                // took a while to find. BAD sign =^(.
+                let rx_stream = node_config.rx_streams().iter().find(|rx_stream| rx_stream.name() == stream.name())
+                    .expect("If a node receives a stream message it should define a corresponding rx_stream. This is not the case here!");
+
                 let Some(encoding) = message.encoding() else {
                     panic!("stream message requires a type encoding");
                 };
                 let mut logic = String::new();
                 for (encoding, object_entry_mapping) in
-                    std::iter::zip(encoding.attributes().iter(), stream.mapping().iter())
+                    std::iter::zip(encoding.attributes().iter(), rx_stream.mapping().iter())
                 {
                     let Some(object_entry_mapping) = object_entry_mapping else {
                         continue;
@@ -96,9 +102,9 @@ pub fn generate_rx_handlers(
                                     if *size <= 8 {
                                         format!("{indent2}resp.data = (uint32_t)({var} & (0xFF >> (8 - {size})));\n")
                                     } else if *size <= 16 {
-                                        format!("{indent2}resp.data = (uint32_t)({var} & (0xFFFF >> (16 - {size});\n")
+                                        format!("{indent2}resp.data = (uint32_t)({var} & (0xFFFF >> (16 - {size})));\n")
                                     } else if *size <= 32 {
-                                        format!("{indent2}resp.data = {var} & (0xFFFFFFFF >> (32 - {size};\n")
+                                        format!("{indent2}resp.data = {var} & (0xFFFFFFFF >> (32 - {size}));\n")
                                     } else if *size <= 64 {
                                         panic!("values larger than 32 should be send in fragmented mode")
                                     } else {
@@ -109,9 +115,9 @@ pub fn generate_rx_handlers(
                                     if *size <= 8 {
                                         format!("{indent2}resp.data = (uint32_t)(((uint8_t){var}) & (0xFF >> (8 - {size})));\n")
                                     } else if *size <= 16 {
-                                        format!("{indent2}resp.data = (uint32_t)(((uint16_t){var}) & (0xFFFF >> (16 - {size});\n")
+                                        format!("{indent2}resp.data = (uint32_t)(((uint16_t){var}) & (0xFFFF >> (16 - {size})));\n")
                                     } else if *size <= 32 {
-                                        format!("{indent2}resp.data = (uint32_t)(((uint32_t){var}) & (0xFFFFFFFF >> (32 - {size});\n")
+                                        format!("{indent2}resp.data = (uint32_t)(((uint32_t){var}) & (0xFFFFFFFF >> (32 - {size})));\n")
                                     } else if *size <= 64 {
                                         panic!("values larger than 32 should be send in fragmented mode")
                                     } else {
@@ -150,9 +156,9 @@ pub fn generate_rx_handlers(
                                 if size <= 8 {
                                     format!("{indent2}resp.data = (uint32_t)(((uint8_t){var}) & (0xFF >> (8 - {size})));\n")
                                 } else if size <= 16 {
-                                    format!("{indent2}resp.data = (uint32_t)(((uint16_t){var}) & (0xFFFF >> (16 - {size});\n")
+                                    format!("{indent2}resp.data = (uint32_t)(((uint16_t){var}) & (0xFFFF >> (16 - {size})));\n")
                                 } else if size <= 32 {
-                                    format!("{indent2}resp.data = ((uint32_t){var}) & (0xFFFFFFFF >> (32 - {size};\n")
+                                    format!("{indent2}resp.data = ((uint32_t){var}) & (0xFFFFFFFF >> (32 - {size}));\n")
                                 } else if size <= 64 {
                                     panic!(
                                         "values larger than 32 should be send in fragmented mode"
@@ -168,7 +174,7 @@ pub fn generate_rx_handlers(
                             "{indent}case {id}: {{
 {oe_value}{indent2}resp.header.sof = 1;
 {indent2}resp.header.eof = 1;
-{indent2}resp.header.toggle = 1;
+{indent2}resp.header.toggle = 0;
 {indent2}break;
 {indent}}}\n"
                         );
@@ -550,7 +556,7 @@ pub fn generate_rx_handlers(
                         generate_parse_logic(&mut parse_logic, object_entry.ty(), &oe_var, &mut 0);
                         case_logic.push_str(&format!(
                             "{indent}case {od_index} : {{
-{indent2}if (msg.header.sof != 1 || msg.header.toggle != 1 || msg.header.eof != 1) {{
+{indent2}if (msg.header.sof != 1 || msg.header.toggle != 0 || msg.header.eof != 1) {{
 {indent3}return;
 {indent2}}}
 {indent2}{parse_logic};
@@ -629,10 +635,10 @@ pub fn generate_rx_handlers(
                                 }
                                 Type::Enum {
                                     name,
-                                    description : _,
+                                    description: _,
                                     size,
-                                    entries : _,
-                                    visibility : _,
+                                    entries: _,
+                                    visibility: _,
                                 } => {
                                     let size = *size as usize;
                                     let bit_word_offset = *bit_offset % 32;
@@ -656,7 +662,7 @@ pub fn generate_rx_handlers(
                                     let val = format!("(({name}){val_bits})");
                                     write_logic.push_str(&format!("{indent}{var} = {val};\n"));
                                 }
-                                Type::Array { len : _, ty : _ } => todo!(),
+                                Type::Array { len: _, ty: _ } => todo!(),
                             }
                         }
                         generate_write_logic(
@@ -711,10 +717,8 @@ pub fn generate_rx_handlers(
                 );
 
                 (logic, false)
-            },
-            message::MessageUsage::Heartbeat => {
-                ("".to_owned(), false)
             }
+            message::MessageUsage::Heartbeat => ("".to_owned(), false),
             message::MessageUsage::External { interval: _ } => ("".to_owned(), true),
         };
 
