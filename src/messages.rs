@@ -464,9 +464,9 @@ pub fn generate_messages(
                                         format!("((uint64_t*)data)[0] & (0xFFFFFFFFFFFFFFFF >> (64 - {size}))")
                                     } else if word_bit_offset + size <= 32 {
                                         let word_offset = *attrib_bit_offset / 32; //intentional floor
-                                        format!("(((uint32_t*)data)[{word_offset}] << {word_bit_offset}) & (0xFFFFFFFF >> (32 - {size}))")
+                                        format!("(((uint32_t*)data)[{word_offset}] >> {word_bit_offset}) & (0xFFFFFFFF >> (32 - {size}))")
                                     } else if word_bit_offset + size > 32 {
-                                        format!("(((uint64_t*)data)[0] << {attrib_bit_offset}) & (0xFFFFFFFFFFFFFFFF >> (64 - {size}))")
+                                        format!("(((uint64_t*)data)[0] >> {attrib_bit_offset}) & (0xFFFFFFFFFFFFFFFF >> (64 - {size}))")
                                     } else {
                                         panic!();
                                     };
@@ -585,15 +585,5 @@ fn bit_access_code(bit_offset: usize, bit_size: usize, buffer_name: &str) -> Str
             >> bit_offset;
         let shift = bit_offset;
         format!("(*((int64_t*){buffer_name}) & 0x{mask:X}) >> {shift}")
-    }
-}
-
-fn bit_write_code(bit_offset: usize, bit_size: usize, buffer_name: &str, value: &str) -> String {
-    if bit_size <= 32 && (bit_size + bit_offset % 32) <= 32 {
-        let word_bit_offset = bit_offset % 32;
-        let word_index = bit_offset / 8;
-        format!("((uint32_t*){buffer_name})[{word_index}] |= {value} << {word_bit_offset}")
-    } else {
-        format!("*((uint64_t*){buffer_name}) |= {value} << {bit_offset}")
     }
 }
