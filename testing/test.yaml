@@ -20,6 +20,12 @@ enum_types:
     safe_to_approach: 12
     emergency: 13
 
+struct_types:
+  no_frac_struct:
+    p_value : d7<0..100>
+    i_value : u5
+    d_value : i8
+
 
 nodes: 
   secu: 
@@ -40,7 +46,7 @@ nodes:
         access : global
         description: state of the pod
       test:
-        type: u8
+        type: no_frac_struct
         access : global
         description : test oe
 
