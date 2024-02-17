@@ -479,7 +479,7 @@ pub fn generate_rx_handlers(
 {indent2}resp.data = {buffer_name}[0];
 {indent2}resp.header.sof = 1;
 {indent2}resp.header.eof = 0;
-{indent2}resp.header.toggle = 1;
+{indent2}resp.header.toggle = 0;
 {indent2}schedule_get_resp_fragmentation_job({buffer_name}, {buffer_size}, {od_index}, msg.header.server_id);
 {indent2}break;
 {indent}}}\n"

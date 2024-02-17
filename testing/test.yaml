@@ -25,6 +25,13 @@ struct_types:
     p_value : d7<0..100>
     i_value : u5
     d_value : i8
+  frac_struct:
+    p_value : d7<0..100>
+    i_value : u5
+    d_value : i8
+    p2_value : d7<0..100>
+    i2_value : u5
+    d2_value : i8
 
 
 nodes: 
@@ -49,6 +56,10 @@ nodes:
         type: no_frac_struct
         access : global
         description : test oe
+      test_frac:
+        type: frac_struct
+        access: global
+        description: frac struct
 
     tx_streams:
       position_and_velocity:

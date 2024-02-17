@@ -296,7 +296,7 @@ static void schedule_jobs(uint32_t time) {{
 {indent3}get_resp_fragmentation_job *fragmentation_job = &to_process->job.get_fragmentation_job;
 {indent3}{namespace}_message_get_resp fragmentation_response;
 {indent3}fragmentation_response.header.sof = 0;
-{indent3}fragmentation_response.header.toggle = (fragmentation_job->offset % 2) + 1;
+{indent3}fragmentation_response.header.toggle = fragmentation_job->offset % 2;
 {indent3}fragmentation_response.header.od_index = fragmentation_job->od_index;
 {indent3}fragmentation_response.header.client_id = 0x{node_id:X};
 {indent3}fragmentation_response.header.server_id = fragmentation_job->server_id;
