@@ -28,7 +28,7 @@ pub fn generate_rx_handlers(
                 // NOTE this is the instance of the tx_stream NOT the rx_stream !!!
                 // pretty bad that there is no difference. Already lead to multiple bugs that
                 // took a while to find. BAD sign =^(.
-                let rx_stream = node_config.rx_streams().iter().find(|rx_stream| rx_stream.name() == stream.name())
+                let rx_stream = node_config.rx_streams().iter().find(|rx_stream| rx_stream.message().name() == stream.message().name())
                     .expect("If a node receives a stream message it should define a corresponding rx_stream. This is not the case here!");
 
                 let Some(encoding) = message.encoding() else {
