@@ -64,6 +64,7 @@ pub fn generate_setters(
                 let job_var = format!("{stream_name}_interval_job");
                 setter_def.push_str(&format!(
 "{indent2}if ({job_var}.climax > {job_var}.job.stream_interval_job.last_schedule + {min_interval_ms}) {{
+{indent3}{job_var}.climax = {job_var}.job.stream_interval_job.last_schedule + {min_interval_ms};
 {indent3}scheduler_promote_job(&{job_var});
 {indent2}}}
 "));

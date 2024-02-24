@@ -210,8 +210,7 @@ static void schedule_jobs(uint32_t time) {
       break;
     }
     case HEARTBEAT_JOB_TAG: {
-      job->climax = time + heartbeat_interval;
-      scheduler_promote_job(job);
+      scheduler_reschedule(time + heartbeat_interval);
       canzero_exit_critical();
       canzero_message_heartbeat heartbeat;
       heartbeat.node_id = 0;
