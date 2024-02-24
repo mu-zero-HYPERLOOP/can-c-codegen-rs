@@ -53,9 +53,11 @@ pub fn generate_scheduler(network_config : &config::NetworkRef, node_config : &c
 "static job_t {stream_name}_interval_job;
 static const uint32_t {stream_name}_interval = {stream_min_interval};
 static void schedule_{stream_name}_interval_job(){{
-{indent}{stream_name}_interval_job.climax = {namespace}_get_time() + {stream_name}_interval;
+{indent}uint32_t time = {namespace}_get_time();
+{indent}{stream_name}_interval_job.climax = time + {stream_name}_interval;
 {indent}{stream_name}_interval_job.tag = STREAM_INTERVAL_JOB_TAG;
 {indent}{stream_name}_interval_job.job.stream_interval_job.stream_id = {stream_id};
+{indent}{stream_name}_interval_job.job.stream_interval_job.last_schedule = time;
 {indent}scheduler_schedule(&{stream_name}_interval_job);
 }}
 "));
@@ -81,6 +83,7 @@ static void schedule_{stream_name}_interval_job(){{
 
         stream_case_logic.push_str(&format!(
 "{indent3}case {stream_id}: {{
+{indent4}job->job.stream_interval_job.last_schedule = time;
 {indent4}scheduler_reschedule(time + {stream_max_interval});
 {indent4}{namespace}_exit_critical();
 {indent4}{namespace}_message_{node_name}_stream_{stream_name} stream_message;
@@ -112,6 +115,7 @@ typedef struct {{
   uint8_t bus_id;
 }} command_resp_timeout_job;
 typedef struct {{
+  uint32_t last_schedule; 
   uint32_t stream_id;
 }} stream_interval_job;
 typedef struct {{
@@ -161,8 +165,9 @@ typedef struct {{
 static job_scheduler_t scheduler;
 static void scheduler_promote_job(job_t *job) {{
 {indent}int index = job->position;
-{indent}if (index == 0)
+{indent}if (index == 0) {{
 {indent2}return;
+{indent}}}
 {indent}int parent = (job->position - 1) / 2;
 {indent}while (scheduler.heap[parent]->climax > scheduler.heap[index]->climax) {{
 {indent2}job_t *tmp = scheduler.heap[parent];
@@ -173,19 +178,18 @@ static void scheduler_promote_job(job_t *job) {{
 {indent2}index = parent;
 {indent2}parent = (index - 1) / 2;
 {indent}}}
+{indent}if (index == 0) {{
+{indent2}{namespace}_request_update(job->climax);
+{indent}}}
 }}
 static void scheduler_schedule(job_t *job) {{
 {indent}if (scheduler.size >= SCHEDULE_HEAP_SIZE) {{
 {indent2}return;
 {indent}}}
-{indent}job_t* next = scheduler.size ? scheduler.heap[0] : NULL;
 {indent}job->position = scheduler.size;
 {indent}scheduler.heap[scheduler.size] = job;
 {indent}scheduler.size += 1;
 {indent}scheduler_promote_job(job);
-{indent}if (next == NULL || next->climax > job->climax) {{
-{indent2}{namespace}_request_update(job->climax);
-{indent}}}
 }}
 static int scheduler_continue(job_t **job, uint32_t time) {{
 {indent}*job = scheduler.heap[0];

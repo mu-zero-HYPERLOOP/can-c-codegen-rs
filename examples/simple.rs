@@ -10,6 +10,7 @@ fn main() {
     secu.create_object_entry("bar", "u32");
     secu.create_object_entry("state", "u8");
     let foo = secu.create_stream("something");
+    foo.set_interval(Duration::from_millis(1000), Duration::from_millis(1000));
     foo.add_entry("bar");
 
 

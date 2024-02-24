@@ -19,6 +19,7 @@ typedef struct {
   uint8_t bus_id;
 } command_resp_timeout_job;
 typedef struct {
+  uint32_t last_schedule; 
   uint32_t stream_id;
 } stream_interval_job;
 typedef struct {
@@ -68,8 +69,9 @@ typedef struct {
 static job_scheduler_t scheduler;
 static void scheduler_promote_job(job_t *job) {
   int index = job->position;
-  if (index == 0)
+  if (index == 0) {
     return;
+  }
   int parent = (job->position - 1) / 2;
   while (scheduler.heap[parent]->climax > scheduler.heap[index]->climax) {
     job_t *tmp = scheduler.heap[parent];
@@ -80,19 +82,18 @@ static void scheduler_promote_job(job_t *job) {
     index = parent;
     parent = (index - 1) / 2;
   }
+  if (index == 0) {
+    canzero_request_update(job->climax);
+  }
 }
 static void scheduler_schedule(job_t *job) {
   if (scheduler.size >= SCHEDULE_HEAP_SIZE) {
     return;
   }
-  job_t* next = scheduler.size ? scheduler.heap[0] : NULL;
   job->position = scheduler.size;
   scheduler.heap[scheduler.size] = job;
   scheduler.size += 1;
   scheduler_promote_job(job);
-  if (next == NULL || next->climax > job->climax) {
-    canzero_request_update(job->climax);
-  }
 }
 static int scheduler_continue(job_t **job, uint32_t time) {
   *job = scheduler.heap[0];
@@ -149,19 +150,23 @@ static void schedule_heartbeat_job() {
   scheduler_schedule(&heartbeat_job);
 }
 static job_t something_interval_job;
-static const uint32_t something_interval = 50;
+static const uint32_t something_interval = 1000;
 static void schedule_something_interval_job(){
-  something_interval_job.climax = canzero_get_time() + something_interval;
+  uint32_t time = canzero_get_time();
+  something_interval_job.climax = time + something_interval;
   something_interval_job.tag = STREAM_INTERVAL_JOB_TAG;
   something_interval_job.job.stream_interval_job.stream_id = 0;
+  something_interval_job.job.stream_interval_job.last_schedule = time;
   scheduler_schedule(&something_interval_job);
 }
 static job_t states_interval_job;
 static const uint32_t states_interval = 5;
 static void schedule_states_interval_job(){
-  states_interval_job.climax = canzero_get_time() + states_interval;
+  uint32_t time = canzero_get_time();
+  states_interval_job.climax = time + states_interval;
   states_interval_job.tag = STREAM_INTERVAL_JOB_TAG;
   states_interval_job.job.stream_interval_job.stream_id = 1;
+  states_interval_job.job.stream_interval_job.last_schedule = time;
   scheduler_schedule(&states_interval_job);
 }
 
@@ -177,7 +182,8 @@ static void schedule_jobs(uint32_t time) {
     case STREAM_INTERVAL_JOB_TAG: {
       switch (job->job.stream_interval_job.stream_id) {
       case 0: {
-        scheduler_reschedule(time + 500);
+        job->job.stream_interval_job.last_schedule = time;
+        scheduler_reschedule(time + 1000);
         canzero_exit_critical();
         canzero_message_secu_stream_something stream_message;
         stream_message.bar = __oe_bar;
@@ -187,6 +193,7 @@ static void schedule_jobs(uint32_t time) {
         break;
       }
       case 1: {
+        job->job.stream_interval_job.last_schedule = time;
         scheduler_reschedule(time + 1000);
         canzero_exit_critical();
         canzero_message_secu_stream_states stream_message;
@@ -343,4 +350,14 @@ uint32_t canzero_update_continue(uint32_t time){
   schedule_something_interval_job();
   schedule_states_interval_job();
 
+}
+void canzero_set_state(uint8_t value) {
+  extern uint8_t __oe_state;
+  if (__oe_state != value) {
+    __oe_state = value;
+    uint32_t time = canzero_get_time();
+    if (states_interval_job.climax > states_interval_job.job.stream_interval_job.last_schedule + 5) {
+      scheduler_promote_job(&states_interval_job);
+    }
+  }
 }

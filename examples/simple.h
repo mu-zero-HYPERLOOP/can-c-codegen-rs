@@ -60,17 +60,9 @@ static inline uint32_t canzero_get_bar() {
   extern uint32_t __oe_bar;
   return __oe_bar;
 }
-static inline void canzero_set_bar(uint32_t value){
-  extern uint32_t __oe_bar;
-  __oe_bar = value;
-}
 static inline uint8_t canzero_get_state() {
   extern uint8_t __oe_state;
   return __oe_state;
-}
-static inline void canzero_set_state(uint8_t value){
-  extern uint8_t __oe_state;
-  __oe_state = value;
 }
 typedef struct {
   get_resp_header header;
@@ -209,4 +201,9 @@ static void canzero_deserialize_canzero_message_set_req(canzero_frame* frame, ca
 void canzero_can0_poll();
 uint32_t canzero_update_continue(uint32_t delta_time);
 void canzero_init();
+static inline void canzero_set_bar(uint32_t value){
+  extern uint32_t __oe_bar;
+  __oe_bar = value;
+}
+void canzero_set_state(uint8_t value);
 #endif

@@ -30,13 +30,9 @@ pub fn generate_object_entries(
         getter_def.push_str(&format!("{indent}return {oe_var};\n"));
         getter_def.push_str("}\n");
         header.push_str(&getter_def);
-
-        let setter_name = format!("{namespace}_set_{oe_name}");
-        let mut setter_def = format!("static inline void {setter_name}({type_name} value){{\n");
-        setter_def.push_str(&format!("{indent}extern {type_name} {oe_var};\n"));
-        setter_def.push_str(&format!("{indent}{oe_var} = value;\n"));
-        setter_def.push_str("}\n");
-        header.push_str(&setter_def);
+        
+        // NOTE: setters where moved to a seperate file
+            
     }
     Ok(())
 }

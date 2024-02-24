@@ -8,6 +8,7 @@ use options::Options;
 use pil::generate_pil;
 use rx_handlers::generate_rx_handlers;
 use scheduler::generate_scheduler;
+use setters::generate_setters;
 use setup::generate_setup;
 use types::generate_types;
 use update::generate_update;
@@ -32,6 +33,7 @@ mod update;
 mod header_guard;
 mod extern_c_guard;
 mod scheduler;
+mod setters;
 
 pub fn generate(
     node_name: &str,
@@ -90,6 +92,9 @@ pub fn generate(
     )?;
     generate_update(&mut src, &mut header, &options)?;
     generate_setup(node_config, &network_config, &mut src, &mut header, &options)?;
+    
+    generate_setters(node_config, &mut header, &mut src, &options)?;
+
     // generate_extern_guard_bottom(&mut header)?;
     generate_header_guard_bottom(&mut header)?;
 
