@@ -47,15 +47,16 @@ pub fn generate_scheduler(network_config : &config::NetworkRef, node_config : &c
 
         let stream_name = tx_stream.name();
         let stream_max_interval = tx_stream.max_interval().as_millis() as u32;
+        let stream_min_interval = tx_stream.min_interval().as_millis() as u32;
     
         schedule_stream_job_def.push_str(&format!(
-"static job {stream_name}_interval_job;
-static const uint32_t {stream_name}_interval = {stream_max_interval};
+"static job_t {stream_name}_interval_job;
+static const uint32_t {stream_name}_interval = {stream_min_interval};
 static void schedule_{stream_name}_interval_job(){{
-{indent}{stream_name}_interval_job.timeout = {namespace}_get_time() + {stream_name}_interval;
-{indent}{stream_name}_interval_job.tag = STREAM_INTERVAL_JOB;
+{indent}{stream_name}_interval_job.climax = {namespace}_get_time() + {stream_name}_interval;
+{indent}{stream_name}_interval_job.tag = STREAM_INTERVAL_JOB_TAG;
 {indent}{stream_name}_interval_job.job.stream_interval_job.stream_id = {stream_id};
-{indent}schedule_job(&{stream_name}_interval_job);
+{indent}scheduler_schedule(&{stream_name}_interval_job);
 }}
 "));
 
@@ -80,7 +81,7 @@ static void schedule_{stream_name}_interval_job(){{
 
         stream_case_logic.push_str(&format!(
 "{indent3}case {stream_id}: {{
-{indent4}schedule_heap_decrement_top(time + {stream_max_interval});
+{indent4}scheduler_reschedule(time + {stream_max_interval});
 {indent4}{namespace}_exit_critical();
 {indent4}{namespace}_message_{node_name}_stream_{stream_name} stream_message;
 {write_attribs_logic}
@@ -92,40 +93,38 @@ static void schedule_{stream_name}_interval_job(){{
         stream_id += 1;
     }
         
-    
     source.push_str(&format!(
 "
 typedef enum {{
-{indent}GET_RESP_FRAGMENTATION_JOB_TAG,
-{indent}HEARTBEAT_JOB_TAB,
-{indent}COMMAND_RESP_TIMEOUT_JOB_TAB,
-{indent}STREAM_INTERVAL_JOB,
+  HEARTBEAT_JOB_TAG = 0,
+  GET_RESP_FRAGMENTATION_JOB_TAG = 1,
+  STREAM_INTERVAL_JOB_TAG = 2,
 }} job_tag;
 typedef struct {{
-{indent}uint32_t *buffer;
-{indent}uint8_t offset;
-{indent}uint8_t size;
-{indent}uint8_t od_index;
-{indent}uint8_t server_id;
+  uint32_t *buffer;
+  uint8_t offset;
+  uint8_t size;
+  uint8_t od_index;
+  uint8_t server_id;
 }} get_resp_fragmentation_job;
 typedef struct {{
-{indent}uint32_t command_resp_msg_id;
-{indent}uint8_t bus_id;
+  uint32_t command_resp_msg_id;
+  uint8_t bus_id;
 }} command_resp_timeout_job;
 typedef struct {{
-{indent}uint32_t stream_id;
+  uint32_t stream_id;
 }} stream_interval_job;
 typedef struct {{
-{indent}uint32_t timeout;
-{indent}job_tag tag;
-{indent}union {{
-{indent2}get_resp_fragmentation_job get_fragmentation_job;
-{indent2}command_resp_timeout_job command_timeout_job;
-{indent2}stream_interval_job stream_interval_job;
-{indent}}} job;
-}} job;
+  uint32_t climax;
+  uint32_t position;
+  job_tag tag;
+  union {{
+    get_resp_fragmentation_job get_fragmentation_job;
+    stream_interval_job stream_interval_job;
+  }} job;
+}} job_t;
 union job_pool_allocator_entry {{
-{indent}job job;
+{indent}job_t job;
 {indent}union job_pool_allocator_entry *next;
 }};
 typedef struct {{
@@ -140,140 +139,120 @@ static void job_pool_allocator_init() {{
 {indent}job_allocator.job[64 - 1].next = NULL;
 {indent}job_allocator.freelist = job_allocator.job;
 }}
-static job *job_pool_allocator_alloc() {{
+static job_t *job_pool_allocator_alloc() {{
 {indent}if (job_allocator.freelist != NULL) {{
-{indent2}job *job = &job_allocator.freelist->job;
+{indent2}job_t *job = &job_allocator.freelist->job;
 {indent2}job_allocator.freelist = job_allocator.freelist->next;
 {indent2}return job;
 {indent}}} else {{
 {indent2}return NULL;
 {indent}}}
 }}
-static void job_pool_allocator_free(job *job) {{
+static void job_pool_allocator_free(job_t *job) {{
 {indent}union job_pool_allocator_entry *entry = (union job_pool_allocator_entry *)job;
 {indent}entry->next = job_allocator.freelist;
 {indent}job_allocator.freelist = entry;
 }}
+#define SCHEDULE_HEAP_SIZE 256
 typedef struct {{
-{indent}job *heap[64];
+{indent}job_t *heap[SCHEDULE_HEAP_SIZE]; // job**
 {indent}uint32_t size;
-}} job_schedule_min_heap;
-static job_schedule_min_heap schedule_heap;
-static void scheduler_init() {{
-{indent}schedule_heap.size = 0;
-{indent}job_pool_allocator_init();
-}}
-static void schedule_heap_bubble_up(int index) {{
-{indent}int parent = (index - 1) / 2;
-{indent}for (uint8_t i = 0; i < 10 && schedule_heap.heap[parent]->timeout > schedule_heap.heap[index]->timeout; ++i) {{
-{indent2}job *tmp = schedule_heap.heap[parent];
-{indent2}schedule_heap.heap[parent] = schedule_heap.heap[index];
-{indent}schedule_heap.heap[index] = tmp;
+}} job_scheduler_t;
+static job_scheduler_t scheduler;
+static void scheduler_promote_job(job_t *job) {{
+{indent}int index = job->position;
+{indent}if (index == 0)
+{indent2}return;
+{indent}int parent = (job->position - 1) / 2;
+{indent}while (scheduler.heap[parent]->climax > scheduler.heap[index]->climax) {{
+{indent2}job_t *tmp = scheduler.heap[parent];
+{indent2}scheduler.heap[parent] = scheduler.heap[index];
+{indent2}scheduler.heap[index] = tmp;
+{indent2}scheduler.heap[parent]->position = parent;
+{indent2}scheduler.heap[index]->position = index;
 {indent2}index = parent;
 {indent2}parent = (index - 1) / 2;
 {indent}}}
 }}
-static int schedule_heap_insert_job(job *job) {{
-{indent}if (schedule_heap.size >= 64) {{
-{indent2}return 1;
-{indent}}}
-{indent}schedule_heap.heap[schedule_heap.size] = job;
-{indent}schedule_heap_bubble_up(schedule_heap.size);
-{indent}schedule_heap.size += 1;
-{indent}return 0;
-}}
-static job *schedule_heap_get_min() {{
-{indent}if (schedule_heap.size != 0) {{
-{indent2}return schedule_heap.heap[0];
-{indent}}} else {{
-{indent2}return NULL;
-{indent}}}
-}}
-static void schedule_heap_bubble_down(int index) {{
-{indent}for (uint8_t i = 0; i < 10; ++i) {{
-{indent2}int left = index * 2 + 1;
-{indent2}int right = left + 1;
-{indent2}int min = index;
-{indent2}if (left >= schedule_heap.size || left < 0) {{
-{indent3}left = -1;
-{indent2}}}
-{indent2}if (right >= schedule_heap.size || right < 0) {{
-{indent3}right = -1;
-{indent2}}}
-{indent2}if (left != -1 && schedule_heap.heap[left]->timeout < schedule_heap.heap[index]->timeout) {{
-{indent3}min = left;
-{indent2}}}
-{indent2}if (right != -1 && schedule_heap.heap[right]->timeout < schedule_heap.heap[min]->timeout) {{
-{indent3}min = right;
-{indent2}}}
-{indent2}if (min != index) {{
-{indent3}job *tmp = schedule_heap.heap[min];
-{indent3}schedule_heap.heap[min] = schedule_heap.heap[index];
-{indent3}schedule_heap.heap[index] = tmp;
-{indent3}index = min;
-{indent2}}} else {{
-{indent3}break;
-{indent2}}}
-{indent}}}
-}}
-static void schedule_heap_remove_min() {{
-{indent}if (schedule_heap.size == 0) {{
+static void scheduler_schedule(job_t *job) {{
+{indent}if (scheduler.size >= SCHEDULE_HEAP_SIZE) {{
 {indent2}return;
 {indent}}}
-{indent}schedule_heap.heap[0] = schedule_heap.heap[schedule_heap.size - 1];
-{indent}schedule_heap.size -= 1;
-{indent}schedule_heap_bubble_down(0);
-}}
-static void schedule_heap_decrement_top(uint32_t timeout) {{
-{indent}schedule_heap.heap[0]->timeout = timeout;
-{indent}schedule_heap_bubble_down(0);
-}}
-static void schedule_job(job *to_schedule) {{
-{indent}job *next = schedule_heap_get_min();
-{indent}schedule_heap_insert_job(to_schedule);
-{indent}if (next == NULL || next->timeout > to_schedule->timeout) {{
-{indent2}canzero_request_update(to_schedule->timeout);
+{indent}job_t* next = scheduler.size ? scheduler.heap[0] : NULL;
+{indent}job->position = scheduler.size;
+{indent}scheduler.heap[scheduler.size] = job;
+{indent}scheduler.size += 1;
+{indent}scheduler_promote_job(job);
+{indent}if (next == NULL || next->climax > job->climax) {{
+{indent2}{namespace}_request_update(job->climax);
 {indent}}}
+}}
+static int scheduler_continue(job_t **job, uint32_t time) {{
+{indent}*job = scheduler.heap[0];
+{indent}return scheduler.heap[0]->climax <= time;
+}}
+static void scheduler_reschedule(uint32_t climax) {{
+{indent}job_t *job = scheduler.heap[0];
+{indent}job->climax = climax;
+{indent}int index = 0;
+{indent}int hsize = scheduler.size / 2;
+{indent}while (index < hsize) {{
+{indent2}int left = index * 2 + 1;
+{indent2}int right = left + 1;
+{indent2}int min;
+{indent2}if (right < scheduler.size &&
+{indent4}scheduler.heap[left] >= scheduler.heap[right]) {{
+{indent3}min = right;
+{indent2}}} else {{
+{indent2}min = left;
+{indent2}}}
+{indent2}if (climax <= scheduler.heap[min]->climax) {{
+{indent3}break;
+{indent2}}}
+{indent2}scheduler.heap[index] = scheduler.heap[min];
+{indent2}scheduler.heap[index]->position = index;
+{indent2}index = min;
+{indent}}}
+{indent}scheduler.heap[index] = job;
+{indent}scheduler.heap[index]->position = index;
+}}
+static void scheduler_unschedule() {{
+{indent}scheduler.heap[0] = scheduler.heap[scheduler.size - 1];
+{indent}scheduler.heap[0]->position = 0;
+{indent}scheduler.size -= 1;
+{indent}scheduler_reschedule(scheduler.heap[0]->climax);
 }}
 static const uint32_t get_resp_fragmentation_interval = 10;
 static void schedule_get_resp_fragmentation_job(uint32_t *fragmentation_buffer, uint8_t size, uint8_t od_index, uint8_t server_id) {{
-{indent}job *fragmentation_job = job_pool_allocator_alloc();
-{indent}fragmentation_job->timeout = canzero_get_time() + get_resp_fragmentation_interval;
+{indent}job_t *fragmentation_job = job_pool_allocator_alloc();
+{indent}fragmentation_job->climax = canzero_get_time() + get_resp_fragmentation_interval;
 {indent}fragmentation_job->tag = GET_RESP_FRAGMENTATION_JOB_TAG;
 {indent}fragmentation_job->job.get_fragmentation_job.buffer = fragmentation_buffer;
 {indent}fragmentation_job->job.get_fragmentation_job.offset = 1;
 {indent}fragmentation_job->job.get_fragmentation_job.size = size;
 {indent}fragmentation_job->job.get_fragmentation_job.od_index = od_index;
 {indent}fragmentation_job->job.get_fragmentation_job.server_id = server_id;
-{indent}schedule_job(fragmentation_job);
+{indent}scheduler_schedule(fragmentation_job);
 }}
-static const uint32_t command_resp_timeout = 100;
-static void schedule_command_resp_timeout_job(uint32_t resp_msg_id) {{
-{indent}job *command_timeout_job = job_pool_allocator_alloc();
-{indent}command_timeout_job->timeout = canzero_get_time() + command_resp_timeout;
-{indent}command_timeout_job->tag = COMMAND_RESP_TIMEOUT_JOB_TAB;
-{indent}command_timeout_job->job.command_timeout_job.command_resp_msg_id = resp_msg_id;
-{indent}schedule_job(command_timeout_job);
-}}
-static job heartbeat_job;
+static job_t heartbeat_job;
 static const uint32_t heartbeat_interval = 100;
 static void schedule_heartbeat_job() {{
-{indent}heartbeat_job.timeout = canzero_get_time() + heartbeat_interval;
-{indent}heartbeat_job.tag = HEARTBEAT_JOB_TAB;
-{indent}schedule_job(&heartbeat_job);
+{indent}heartbeat_job.climax = canzero_get_time() + heartbeat_interval;
+{indent}heartbeat_job.tag = HEARTBEAT_JOB_TAG;
+{indent}scheduler_schedule(&heartbeat_job);
 }}
 {schedule_stream_job_def}
 static void schedule_jobs(uint32_t time) {{
 {indent}for (uint8_t i = 0; i < 100; ++i) {{
 {indent2}{namespace}_enter_critical();
-{indent2}job *to_process = schedule_heap_get_min();
-{indent2}if (to_process->timeout > time) {{
+{indent2}job_t *job;
+{indent2}if (!scheduler_continue(&job, time)) {{
 {indent3}{namespace}_exit_critical();
 {indent3}return;
 {indent2}}}
-{indent2}switch (to_process->tag) {{
-{indent2}case STREAM_INTERVAL_JOB: {{
-{indent3}switch (to_process->job.stream_interval_job.stream_id) {{
+{indent2}switch (job->tag) {{
+{indent2}case STREAM_INTERVAL_JOB_TAG: {{
+{indent3}switch (job->job.stream_interval_job.stream_id) {{
 {stream_case_logic}
 {indent3}default:
 {indent4}{namespace}_exit_critical();
@@ -281,9 +260,9 @@ static void schedule_jobs(uint32_t time) {{
 {indent3}}}
 {indent3}break;
 {indent2}}}
-{indent2}case HEARTBEAT_JOB_TAB: {{
-{indent3}// TODO config requires a heartbeat message for each node!
-{indent3}schedule_heap_decrement_top(time + heartbeat_interval);
+{indent2}case HEARTBEAT_JOB_TAG: {{
+{indent3}job->climax = time + heartbeat_interval;
+{indent3}scheduler_promote_job(job);
 {indent3}{namespace}_exit_critical();
 {indent3}{namespace}_message_heartbeat heartbeat;
 {indent3}heartbeat.node_id = {node_id};
@@ -293,7 +272,7 @@ static void schedule_jobs(uint32_t time) {{
 {indent3}break;
 {indent2}}}
 {indent2}case GET_RESP_FRAGMENTATION_JOB_TAG: {{
-{indent3}get_resp_fragmentation_job *fragmentation_job = &to_process->job.get_fragmentation_job;
+{indent3}get_resp_fragmentation_job *fragmentation_job = &job->job.get_fragmentation_job;
 {indent3}{namespace}_message_get_resp fragmentation_response;
 {indent3}fragmentation_response.header.sof = 0;
 {indent3}fragmentation_response.header.toggle = fragmentation_job->offset % 2;
@@ -304,28 +283,15 @@ static void schedule_jobs(uint32_t time) {{
 {indent3}fragmentation_job->offset += 1;
 {indent3}if (fragmentation_job->offset == fragmentation_job->size) {{
 {indent4}fragmentation_response.header.eof = 1;
-{indent4}schedule_heap_remove_min();
+{indent4}scheduler_unschedule();
 {indent3}}} else {{
 {indent4}fragmentation_response.header.eof = 0;
-{indent4}schedule_heap_decrement_top(time + get_resp_fragmentation_interval);
+{indent4}scheduler_reschedule(time + get_resp_fragmentation_interval);
 {indent3}}}
 {indent3}{namespace}_exit_critical();
 {indent3}canzero_frame fragmentation_frame;
 {indent3}{namespace}_serialize_{namespace}_message_get_resp(&fragmentation_response, &fragmentation_frame);
 {indent3}canzero_can{get_resp_bus_id}_send(&fragmentation_frame);
-{indent3}break;
-{indent2}}}
-{indent2}case COMMAND_RESP_TIMEOUT_JOB_TAB: {{
-{indent3}command_resp_timeout_job *timeout_job = &to_process->job.command_timeout_job;
-{indent3}uint8_t bus_id = timeout_job->bus_id;
-{indent3}canzero_frame command_error_frame;
-{indent3}command_error_frame.id = timeout_job->command_resp_msg_id;
-{indent3}command_error_frame.dlc = {command_resp_dlc};
-{indent3}schedule_heap_remove_min();
-{indent3}{namespace}_exit_critical();
-{indent3}switch (bus_id) {{
-{command_resp_send_on_bus_cases}
-{indent3}}}
 {indent3}break;
 {indent2}}}
 {indent2}default:
@@ -335,9 +301,256 @@ static void schedule_jobs(uint32_t time) {{
 {indent}}}
 }}
 static uint32_t scheduler_next_job_timeout(){{
-{indent}return schedule_heap_get_min()->timeout;
+{indent}return scheduler.heap[0]->climax;
 }}
-"));
+"
+));
+    
+//     source.push_str(&format!(
+// "
+// typedef enum {{
+// {indent}GET_RESP_FRAGMENTATION_JOB_TAG,
+// {indent}HEARTBEAT_JOB_TAB,
+// {indent}COMMAND_RESP_TIMEOUT_JOB_TAB,
+// {indent}STREAM_INTERVAL_JOB,
+// }} job_tag;
+// typedef struct {{
+// {indent}uint32_t *buffer;
+// {indent}uint8_t offset;
+// {indent}uint8_t size;
+// {indent}uint8_t od_index;
+// {indent}uint8_t server_id;
+// }} get_resp_fragmentation_job;
+// typedef struct {{
+// {indent}uint32_t command_resp_msg_id;
+// {indent}uint8_t bus_id;
+// }} command_resp_timeout_job;
+// typedef struct {{
+// {indent}uint32_t stream_id;
+// }} stream_interval_job;
+// typedef struct {{
+// {indent}uint32_t timeout;
+// {indent}job_tag tag;
+// {indent}union {{
+// {indent2}get_resp_fragmentation_job get_fragmentation_job;
+// {indent2}command_resp_timeout_job command_timeout_job;
+// {indent2}stream_interval_job stream_interval_job;
+// {indent}}} job;
+// }} job;
+// union job_pool_allocator_entry {{
+// {indent}job job;
+// {indent}union job_pool_allocator_entry *next;
+// }};
+// typedef struct {{
+// {indent}union job_pool_allocator_entry job[64];
+// {indent}union job_pool_allocator_entry *freelist;
+// }} job_pool_allocator;
+// static job_pool_allocator job_allocator;
+// static void job_pool_allocator_init() {{
+// {indent}for (uint8_t i = 1; i < 64; i++) {{
+// {indent2}job_allocator.job[i - 1].next = job_allocator.job + i;
+// {indent}}}
+// {indent}job_allocator.job[64 - 1].next = NULL;
+// {indent}job_allocator.freelist = job_allocator.job;
+// }}
+// static job *job_pool_allocator_alloc() {{
+// {indent}if (job_allocator.freelist != NULL) {{
+// {indent2}job *job = &job_allocator.freelist->job;
+// {indent2}job_allocator.freelist = job_allocator.freelist->next;
+// {indent2}return job;
+// {indent}}} else {{
+// {indent2}return NULL;
+// {indent}}}
+// }}
+// static void job_pool_allocator_free(job *job) {{
+// {indent}union job_pool_allocator_entry *entry = (union job_pool_allocator_entry *)job;
+// {indent}entry->next = job_allocator.freelist;
+// {indent}job_allocator.freelist = entry;
+// }}
+// typedef struct {{
+// {indent}job *heap[64];
+// {indent}uint32_t size;
+// }} job_schedule_min_heap;
+// static job_schedule_min_heap schedule_heap;
+// static void scheduler_init() {{
+// {indent}schedule_heap.size = 0;
+// {indent}job_pool_allocator_init();
+// }}
+// static void schedule_heap_bubble_up(int index) {{
+// {indent}int parent = (index - 1) / 2;
+// {indent}for (uint8_t i = 0; i < 10 && schedule_heap.heap[parent]->timeout > schedule_heap.heap[index]->timeout; ++i) {{
+// {indent2}job *tmp = schedule_heap.heap[parent];
+// {indent2}schedule_heap.heap[parent] = schedule_heap.heap[index];
+// {indent}schedule_heap.heap[index] = tmp;
+// {indent2}index = parent;
+// {indent2}parent = (index - 1) / 2;
+// {indent}}}
+// }}
+// static int schedule_heap_insert_job(job *job) {{
+// {indent}if (schedule_heap.size >= 64) {{
+// {indent2}return 1;
+// {indent}}}
+// {indent}schedule_heap.heap[schedule_heap.size] = job;
+// {indent}schedule_heap_bubble_up(schedule_heap.size);
+// {indent}schedule_heap.size += 1;
+// {indent}return 0;
+// }}
+// static job *schedule_heap_get_min() {{
+// {indent}if (schedule_heap.size != 0) {{
+// {indent2}return schedule_heap.heap[0];
+// {indent}}} else {{
+// {indent2}return NULL;
+// {indent}}}
+// }}
+// static void schedule_heap_bubble_down(int index) {{
+// {indent}for (uint8_t i = 0; i < 10; ++i) {{
+// {indent2}int left = index * 2 + 1;
+// {indent2}int right = left + 1;
+// {indent2}int min = index;
+// {indent2}if (left >= schedule_heap.size || left < 0) {{
+// {indent3}left = -1;
+// {indent2}}}
+// {indent2}if (right >= schedule_heap.size || right < 0) {{
+// {indent3}right = -1;
+// {indent2}}}
+// {indent2}if (left != -1 && schedule_heap.heap[left]->timeout < schedule_heap.heap[index]->timeout) {{
+// {indent3}min = left;
+// {indent2}}}
+// {indent2}if (right != -1 && schedule_heap.heap[right]->timeout < schedule_heap.heap[min]->timeout) {{
+// {indent3}min = right;
+// {indent2}}}
+// {indent2}if (min != index) {{
+// {indent3}job *tmp = schedule_heap.heap[min];
+// {indent3}schedule_heap.heap[min] = schedule_heap.heap[index];
+// {indent3}schedule_heap.heap[index] = tmp;
+// {indent3}index = min;
+// {indent2}}} else {{
+// {indent3}break;
+// {indent2}}}
+// {indent}}}
+// }}
+// static void schedule_heap_remove_min() {{
+// {indent}if (schedule_heap.size == 0) {{
+// {indent2}return;
+// {indent}}}
+// {indent}schedule_heap.heap[0] = schedule_heap.heap[schedule_heap.size - 1];
+// {indent}schedule_heap.size -= 1;
+// {indent}schedule_heap_bubble_down(0);
+// }}
+// static void schedule_heap_decrement_top(uint32_t timeout) {{
+// {indent}schedule_heap.heap[0]->timeout = timeout;
+// {indent}schedule_heap_bubble_down(0);
+// }}
+// static void schedule_job(job *to_schedule) {{
+// {indent}job *next = schedule_heap_get_min();
+// {indent}schedule_heap_insert_job(to_schedule);
+// {indent}if (next == NULL || next->timeout > to_schedule->timeout) {{
+// {indent2}canzero_request_update(to_schedule->timeout);
+// {indent}}}
+// }}
+// static const uint32_t get_resp_fragmentation_interval = 10;
+// static void schedule_get_resp_fragmentation_job(uint32_t *fragmentation_buffer, uint8_t size, uint8_t od_index, uint8_t server_id) {{
+// {indent}job *fragmentation_job = job_pool_allocator_alloc();
+// {indent}fragmentation_job->timeout = canzero_get_time() + get_resp_fragmentation_interval;
+// {indent}fragmentation_job->tag = GET_RESP_FRAGMENTATION_JOB_TAG;
+// {indent}fragmentation_job->job.get_fragmentation_job.buffer = fragmentation_buffer;
+// {indent}fragmentation_job->job.get_fragmentation_job.offset = 1;
+// {indent}fragmentation_job->job.get_fragmentation_job.size = size;
+// {indent}fragmentation_job->job.get_fragmentation_job.od_index = od_index;
+// {indent}fragmentation_job->job.get_fragmentation_job.server_id = server_id;
+// {indent}schedule_job(fragmentation_job);
+// }}
+// static const uint32_t command_resp_timeout = 100;
+// static void schedule_command_resp_timeout_job(uint32_t resp_msg_id) {{
+// {indent}job *command_timeout_job = job_pool_allocator_alloc();
+// {indent}command_timeout_job->timeout = canzero_get_time() + command_resp_timeout;
+// {indent}command_timeout_job->tag = COMMAND_RESP_TIMEOUT_JOB_TAB;
+// {indent}command_timeout_job->job.command_timeout_job.command_resp_msg_id = resp_msg_id;
+// {indent}schedule_job(command_timeout_job);
+// }}
+// static job heartbeat_job;
+// static const uint32_t heartbeat_interval = 100;
+// static void schedule_heartbeat_job() {{
+// {indent}heartbeat_job.timeout = canzero_get_time() + heartbeat_interval;
+// {indent}heartbeat_job.tag = HEARTBEAT_JOB_TAB;
+// {indent}schedule_job(&heartbeat_job);
+// }}
+// {schedule_stream_job_def}
+// static void schedule_jobs(uint32_t time) {{
+// {indent}for (uint8_t i = 0; i < 100; ++i) {{
+// {indent2}{namespace}_enter_critical();
+// {indent2}job *to_process = schedule_heap_get_min();
+// {indent2}if (to_process->timeout > time) {{
+// {indent3}{namespace}_exit_critical();
+// {indent3}return;
+// {indent2}}}
+// {indent2}switch (to_process->tag) {{
+// {indent2}case STREAM_INTERVAL_JOB: {{
+// {indent3}switch (to_process->job.stream_interval_job.stream_id) {{
+// {stream_case_logic}
+// {indent3}default:
+// {indent4}{namespace}_exit_critical();
+// {indent4}break;
+// {indent3}}}
+// {indent3}break;
+// {indent2}}}
+// {indent2}case HEARTBEAT_JOB_TAB: {{
+// {indent3}// TODO config requires a heartbeat message for each node!
+// {indent3}schedule_heap_decrement_top(time + heartbeat_interval);
+// {indent3}{namespace}_exit_critical();
+// {indent3}{namespace}_message_heartbeat heartbeat;
+// {indent3}heartbeat.node_id = {node_id};
+// {indent3}{namespace}_frame heartbeat_frame;
+// {indent3}{namespace}_serialize_{namespace}_message_heartbeat(&heartbeat, &heartbeat_frame);
+// {indent3}{namespace}_can{heartbeat_bus_id}_send(&heartbeat_frame);
+// {indent3}break;
+// {indent2}}}
+// {indent2}case GET_RESP_FRAGMENTATION_JOB_TAG: {{
+// {indent3}get_resp_fragmentation_job *fragmentation_job = &to_process->job.get_fragmentation_job;
+// {indent3}{namespace}_message_get_resp fragmentation_response;
+// {indent3}fragmentation_response.header.sof = 0;
+// {indent3}fragmentation_response.header.toggle = fragmentation_job->offset % 2;
+// {indent3}fragmentation_response.header.od_index = fragmentation_job->od_index;
+// {indent3}fragmentation_response.header.client_id = 0x{node_id:X};
+// {indent3}fragmentation_response.header.server_id = fragmentation_job->server_id;
+// {indent3}fragmentation_response.data = fragmentation_job->buffer[fragmentation_job->offset];
+// {indent3}fragmentation_job->offset += 1;
+// {indent3}if (fragmentation_job->offset == fragmentation_job->size) {{
+// {indent4}fragmentation_response.header.eof = 1;
+// {indent4}schedule_heap_remove_min();
+// {indent3}}} else {{
+// {indent4}fragmentation_response.header.eof = 0;
+// {indent4}schedule_heap_decrement_top(time + get_resp_fragmentation_interval);
+// {indent3}}}
+// {indent3}{namespace}_exit_critical();
+// {indent3}canzero_frame fragmentation_frame;
+// {indent3}{namespace}_serialize_{namespace}_message_get_resp(&fragmentation_response, &fragmentation_frame);
+// {indent3}canzero_can{get_resp_bus_id}_send(&fragmentation_frame);
+// {indent3}break;
+// {indent2}}}
+// {indent2}case COMMAND_RESP_TIMEOUT_JOB_TAB: {{
+// {indent3}command_resp_timeout_job *timeout_job = &to_process->job.command_timeout_job;
+// {indent3}uint8_t bus_id = timeout_job->bus_id;
+// {indent3}canzero_frame command_error_frame;
+// {indent3}command_error_frame.id = timeout_job->command_resp_msg_id;
+// {indent3}command_error_frame.dlc = {command_resp_dlc};
+// {indent3}schedule_heap_remove_min();
+// {indent3}{namespace}_exit_critical();
+// {indent3}switch (bus_id) {{
+// {command_resp_send_on_bus_cases}
+// {indent3}}}
+// {indent3}break;
+// {indent2}}}
+// {indent2}default:
+// {indent3}{namespace}_exit_critical();
+// {indent3}break;
+// {indent2}}}
+// {indent}}}
+// }}
+// static uint32_t scheduler_next_job_timeout(){{
+// {indent}return schedule_heap_get_min()->timeout;
+// }}
+// "));
 
     Ok(())
 }

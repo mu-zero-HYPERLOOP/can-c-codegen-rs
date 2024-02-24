@@ -34,7 +34,8 @@ pub fn generate_setup(node_config : &config::NodeRef, network_config : &config::
 
     let init_def = format!("void {init_name}() {{
 {setup_cans}
-{indent}scheduler_init();
+{indent}job_pool_allocator_init();
+{indent}scheduler.size = 0;
 {indent}schedule_heartbeat_job();
 {schedule_stream_jobs_logic}
 }}\n");
