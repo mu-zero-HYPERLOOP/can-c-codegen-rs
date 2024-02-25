@@ -100,7 +100,7 @@ static void scheduler_reschedule(uint32_t climax) {
     int right = left + 1;
     int min;
     if (right < scheduler.size &&
-        scheduler.heap[left] >= scheduler.heap[right]) {
+        scheduler.heap[left]->climax >= scheduler.heap[right]->climax) {
       min = right;
     } else {
       min = left;
@@ -135,13 +135,13 @@ int main() {
 
   double time_per_job_score = 0;
 
-  const int SIM_TIME = 100000;
-  const int MAX_JOBS = 100;
-  const int ITERATIONS = 1000;
+  const int SIM_TIME = 10;
+  const int MAX_JOBS = 10;
+  const int ITERATIONS = 1;
 
   job_t *jobs = calloc(MAX_JOBS, sizeof(job_t));
 
-  for (int i = 1; i < MAX_JOBS; i++) {
+  for (int i = 2; i < MAX_JOBS; i++) {
 
     double time_per_step_sum = 0;
     for (int iteration = 0; iteration < ITERATIONS; iteration++) {
@@ -163,9 +163,18 @@ int main() {
         while (scheduler_continue(&current, time)) {
           if (current->tag == STREAM_INTERVAL_JOB) {
             scheduler_reschedule(time + current->job.stream_interval_job.stream_id);
-          } else {
+          } 
+          printf("scheduler step:\n");
+          for (int i = 1,j = 0;j < scheduler.size; i*= 2) { // row
+            for (;j <= (i-1)*2 && j < scheduler.size;j++) {
+              printf("%u ", scheduler.heap[j]->climax);
+            }
+            printf("\n");
           }
+          printf("\n");
         }
+        scheduler.heap[scheduler.size - 1]->climax = time+1;
+        scheduler_promote_job(scheduler.heap[scheduler.size - 1]);
       }
       t = clock() - t;
       double time_taken = ((double)t) / CLOCKS_PER_SEC;

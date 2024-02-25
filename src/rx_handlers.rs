@@ -1,6 +1,6 @@
 use can_config_rs::config::{self, message, Type, TypeRef};
 
-use crate::{errors::Result, options::Options};
+use crate::{errors::Result, options::Options, types::to_c_type_name};
 
 pub fn generate_rx_handlers(
     network_config: &config::NetworkRef,
@@ -42,11 +42,12 @@ pub fn generate_rx_handlers(
                         continue;
                     };
                     let object_entry_name = object_entry_mapping.name();
-                    let object_entry_var = format!("__oe_{object_entry_name}");
+                    // let object_entry_var = format!("__oe_{object_entry_name}");
 
                     let msg_attribute = encoding.name();
 
-                    logic += &format!("{indent}{object_entry_var} = msg.{msg_attribute};\n");
+                    logic += &format!("{indent}{namespace}_set_{object_entry_name}(msg.{msg_attribute});\n");
+                    // logic += &format!("{indent}{object_entry_var} = msg.{msg_attribute};\n");
                 }
                 (logic, false)
             }
@@ -510,9 +511,11 @@ pub fn generate_rx_handlers(
                 for object_entry in node_config.object_entries() {
                     let od_index = object_entry.id();
                     let size = ty_size(object_entry.ty());
-                    let mut parse_logic = String::new();
                     let oe_name = object_entry.name();
-                    let oe_var = format!("__oe_{oe_name}");
+                    let ty = to_c_type_name(object_entry.ty());
+                    let oe_tmp_var = format!("{ty} {oe_name}_tmp;\n");
+                    let mut parse_logic = format!("{oe_tmp_var}");
+                    let oe_var = format!("{oe_name}_tmp");
                     if size <= 32 {
                         fn generate_parse_logic(
                             parse_logic: &mut String,
@@ -603,19 +606,19 @@ pub fn generate_rx_handlers(
                                         format!("(msg.data & (0xFFFFFFFF >> (32 - {size})))");
 
                                     let parsed_val = format!("({name})({masked_val})");
-                                    parse_logic.push_str(&format!("{var} = {parsed_val}"));
+                                    parse_logic.push_str(&format!("{var} = {parsed_val};\n"));
                                     *attrib_offset += size as usize;
                                 }
                                 Type::Array { len: _, ty: _ } => todo!(),
                             }
                         }
-                        generate_parse_logic(&mut parse_logic, object_entry.ty(), &oe_var, &mut 0);
+                        generate_parse_logic(&mut parse_logic, object_entry.ty(), &format!("{indent2}{oe_var}"), &mut 0);
                         case_logic.push_str(&format!(
                             "{indent}case {od_index} : {{
 {indent2}if (msg.header.sof != 1 || msg.header.toggle != 0 || msg.header.eof != 1) {{
 {indent3}return;
 {indent2}}}
-{indent2}{parse_logic};
+{indent2}{parse_logic}{indent2}{namespace}_set_{oe_name}({oe_var});
 {indent2}break;
 {indent}}}
 "
@@ -729,6 +732,7 @@ pub fn generate_rx_handlers(
                             &oe_var,
                             &indent2,
                         );
+                        let oe_ty = to_c_type_name(object_entry.ty());
 
                         case_logic.push_str(&format!(
                             "{indent}case {od_index} : {{
@@ -747,7 +751,8 @@ pub fn generate_rx_handlers(
 {indent2}if (msg.header.eof == 0) {{
 {indent3}return;
 {indent2}}}
-{write_logic}
+{indent2}{oe_ty} {oe_var};
+{write_logic}{indent2}{namespace}_set_{oe_name}({oe_var});
 {indent2}break;
 {indent}}}
 "

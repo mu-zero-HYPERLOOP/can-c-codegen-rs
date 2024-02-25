@@ -17,6 +17,7 @@ typedef struct {
 } set_req_header;
 typedef enum {
   node_id_secu = 0,
+  node_id_master = 1,
 } node_id;
 typedef struct {
   uint8_t sof;
@@ -60,43 +61,47 @@ static inline uint32_t canzero_get_bar() {
   extern uint32_t __oe_bar;
   return __oe_bar;
 }
-static inline uint8_t canzero_get_state() {
-  extern uint8_t __oe_state;
+static inline uint64_t canzero_get_state() {
+  extern uint64_t __oe_state;
   return __oe_state;
 }
 typedef struct {
   get_resp_header header;
   uint32_t data;
 } canzero_message_get_resp;
-static const uint32_t canzero_message_get_resp_id = 0xD;
+static const uint32_t canzero_message_get_resp_id = 0x1D;
 typedef struct {
   set_resp_header header;
 } canzero_message_set_resp;
-static const uint32_t canzero_message_set_resp_id = 0xC;
+static const uint32_t canzero_message_set_resp_id = 0x1C;
 typedef struct {
   uint32_t bar;
 } canzero_message_secu_stream_something;
-static const uint32_t canzero_message_secu_stream_something_id = 0x9;
+static const uint32_t canzero_message_secu_stream_something_id = 0x15;
 typedef struct {
-  uint8_t state;
+  uint64_t state;
 } canzero_message_secu_stream_states;
-static const uint32_t canzero_message_secu_stream_states_id = 0x8;
+static const uint32_t canzero_message_secu_stream_states_id = 0x14;
 typedef struct {
   node_id node_id;
 } canzero_message_heartbeat;
-static const uint32_t canzero_message_heartbeat_id = 0x13;
+static const uint32_t canzero_message_heartbeat_id = 0x27;
 typedef struct {
   get_req_header header;
 } canzero_message_get_req;
-static const uint32_t canzero_message_get_req_id = 0xF;
+static const uint32_t canzero_message_get_req_id = 0x1F;
 typedef struct {
   set_req_header header;
   uint32_t data;
 } canzero_message_set_req;
-static const uint32_t canzero_message_set_req_id = 0xE;
+static const uint32_t canzero_message_set_req_id = 0x1E;
+typedef struct {
+  uint64_t secu_control;
+} canzero_message_master_stream_control;
+static const uint32_t canzero_message_master_stream_control_id = 0x13;
 static void canzero_serialize_canzero_message_get_resp(canzero_message_get_resp* msg, canzero_frame* frame) {
   uint8_t* data = frame->data;
-  frame->id = 0xD;
+  frame->id = 0x1D;
   frame->dlc = 8;
   ((uint32_t*)data)[0] = (uint8_t)(msg->header.sof & (0xFF >> (8 - 1)));
   ((uint32_t*)data)[0] |= (uint8_t)(msg->header.eof & (0xFF >> (8 - 1))) << 1;
@@ -108,7 +113,7 @@ static void canzero_serialize_canzero_message_get_resp(canzero_message_get_resp*
 }
 static void canzero_serialize_canzero_message_set_resp(canzero_message_set_resp* msg, canzero_frame* frame) {
   uint8_t* data = frame->data;
-  frame->id = 0xC;
+  frame->id = 0x1C;
   frame->dlc = 4;
   ((uint32_t*)data)[0] = (uint16_t)(msg->header.od_index & (0xFFFF >> (16 - 13)));
   ((uint32_t*)data)[0] |= msg->header.client_id << 13;
@@ -117,25 +122,25 @@ static void canzero_serialize_canzero_message_set_resp(canzero_message_set_resp*
 }
 static void canzero_serialize_canzero_message_secu_stream_something(canzero_message_secu_stream_something* msg, canzero_frame* frame) {
   uint8_t* data = frame->data;
-  frame->id = 0x9;
+  frame->id = 0x15;
   frame->dlc = 4;
   ((uint32_t*)data)[0] = msg->bar;
 }
 static void canzero_serialize_canzero_message_secu_stream_states(canzero_message_secu_stream_states* msg, canzero_frame* frame) {
   uint8_t* data = frame->data;
-  frame->id = 0x8;
-  frame->dlc = 1;
-  ((uint32_t*)data)[0] = msg->state;
+  frame->id = 0x14;
+  frame->dlc = 8;
+  ((uint64_t*)data)[0] = msg->state;
 }
 static void canzero_serialize_canzero_message_heartbeat(canzero_message_heartbeat* msg, canzero_frame* frame) {
   uint8_t* data = frame->data;
-  frame->id = 0x13;
+  frame->id = 0x27;
   frame->dlc = 1;
   ((uint32_t*)data)[0] = (uint8_t)(msg->node_id & (0xFF >> (8 - 1)));
 }
 static void canzero_serialize_canzero_message_get_req(canzero_message_get_req* msg, canzero_frame* frame) {
   uint8_t* data = frame->data;
-  frame->id = 0xF;
+  frame->id = 0x1F;
   frame->dlc = 4;
   ((uint32_t*)data)[0] = (uint16_t)(msg->header.od_index & (0xFFFF >> (16 - 13)));
   ((uint32_t*)data)[0] |= msg->header.client_id << 13;
@@ -143,7 +148,7 @@ static void canzero_serialize_canzero_message_get_req(canzero_message_get_req* m
 }
 static void canzero_serialize_canzero_message_set_req(canzero_message_set_req* msg, canzero_frame* frame) {
   uint8_t* data = frame->data;
-  frame->id = 0xE;
+  frame->id = 0x1E;
   frame->dlc = 8;
   ((uint32_t*)data)[0] = (uint8_t)(msg->header.sof & (0xFF >> (8 - 1)));
   ((uint32_t*)data)[0] |= (uint8_t)(msg->header.eof & (0xFF >> (8 - 1))) << 1;
@@ -152,6 +157,12 @@ static void canzero_serialize_canzero_message_set_req(canzero_message_set_req* m
   ((uint32_t*)data)[0] |= msg->header.client_id << 16;
   ((uint32_t*)data)[0] |= msg->header.server_id << 24;
   ((uint32_t*)data)[1] = msg->data;
+}
+static void canzero_serialize_canzero_message_master_stream_control(canzero_message_master_stream_control* msg, canzero_frame* frame) {
+  uint8_t* data = frame->data;
+  frame->id = 0x13;
+  frame->dlc = 8;
+  ((uint64_t*)data)[0] = msg->secu_control;
 }
 static void canzero_deserialize_canzero_message_get_resp(canzero_frame* frame, canzero_message_get_resp* msg) {
   uint8_t* data = frame->data;
@@ -176,7 +187,7 @@ static void canzero_deserialize_canzero_message_secu_stream_something(canzero_fr
 }
 static void canzero_deserialize_canzero_message_secu_stream_states(canzero_frame* frame, canzero_message_secu_stream_states* msg) {
   uint8_t* data = frame->data;
-  msg->state = (((uint32_t*)data)[0] & (0xFFFFFFFF >> (32 - 8)));
+  msg->state = (((uint64_t*)data)[0] & (0xFFFFFFFFFFFFFFFF >> (64 - 64)));
 }
 static void canzero_deserialize_canzero_message_heartbeat(canzero_frame* frame, canzero_message_heartbeat* msg) {
   uint8_t* data = frame->data;
@@ -198,6 +209,10 @@ static void canzero_deserialize_canzero_message_set_req(canzero_frame* frame, ca
   msg->header.server_id = ((((uint32_t*)data)[0] >> 24) & (0xFFFFFFFF >> (32 - 8)));
   msg->data = (((uint32_t*)data)[1] & (0xFFFFFFFF >> (32 - 32)));
 }
+static void canzero_deserialize_canzero_message_master_stream_control(canzero_frame* frame, canzero_message_master_stream_control* msg) {
+  uint8_t* data = frame->data;
+  msg->secu_control = (((uint64_t*)data)[0] & (0xFFFFFFFFFFFFFFFF >> (64 - 64)));
+}
 void canzero_can0_poll();
 uint32_t canzero_update_continue(uint32_t delta_time);
 void canzero_init();
@@ -205,5 +220,5 @@ static inline void canzero_set_bar(uint32_t value){
   extern uint32_t __oe_bar;
   __oe_bar = value;
 }
-void canzero_set_state(uint8_t value);
+void canzero_set_state(uint64_t value);
 #endif

@@ -1,6 +1,6 @@
 #include "simple.h"
 uint32_t __oe_bar;
-uint8_t __oe_state;
+uint64_t __oe_state;
 
 typedef enum {
   HEARTBEAT_JOB_TAG = 0,
@@ -109,7 +109,7 @@ static void scheduler_reschedule(uint32_t climax) {
     int right = left + 1;
     int min;
     if (right < scheduler.size &&
-        scheduler.heap[left] >= scheduler.heap[right]) {
+        scheduler.heap[left]->climax >= scheduler.heap[right]->climax) {
       min = right;
     } else {
     min = left;
@@ -251,6 +251,7 @@ static void schedule_jobs(uint32_t time) {
 static uint32_t scheduler_next_job_timeout(){
   return scheduler.heap[0]->climax;
 }
+static uint32_t __oe_state_rx_fragmentation_buffer[2];
 static void canzero_handle_get_req(canzero_frame* frame) {
   canzero_message_get_req msg;
   canzero_deserialize_canzero_message_get_req(frame, &msg);
@@ -267,10 +268,16 @@ static void canzero_handle_get_req(canzero_frame* frame) {
     break;
   }
   case 1: {
-    resp.data |= ((uint32_t)(__oe_state & (0xFF >> (8 - 8)))) << 0;
+    {
+      uint64_t masked = (__oe_state & (0xFFFFFFFFFFFFFFFF >> (64 - 64)));
+      __oe_state_rx_fragmentation_buffer[0] = ((uint32_t*)&masked)[0];
+      __oe_state_rx_fragmentation_buffer[1] = ((uint32_t*)&masked)[1];
+    }
+    resp.data = __oe_state_rx_fragmentation_buffer[0];
     resp.header.sof = 1;
-    resp.header.eof = 1;
+    resp.header.eof = 0;
     resp.header.toggle = 0;
+    schedule_get_resp_fragmentation_job(__oe_state_rx_fragmentation_buffer, 2, 1, msg.header.server_id);
     break;
   }
   }
@@ -281,6 +288,8 @@ static void canzero_handle_get_req(canzero_frame* frame) {
   canzero_serialize_canzero_message_get_resp(&resp, &resp_frame);
   canzero_can0_send(&resp_frame);
 }
+static uint32_t state_tx_fragmentation_buffer[2];
+static uint32_t state_tx_fragmentation_offset = 0;
 static void canzero_handle_set_req(canzero_frame* frame) {
   canzero_message_set_req msg;
   canzero_deserialize_canzero_message_set_req(frame, &msg);
@@ -293,16 +302,30 @@ static void canzero_handle_set_req(canzero_frame* frame) {
     if (msg.header.sof != 1 || msg.header.toggle != 0 || msg.header.eof != 1) {
       return;
     }
-    __oe_bar = (uint32_t)(msg.data & (0xFFFFFFFF >> (32 - 32)));
-;
+    uint32_t bar;
+    bar = (uint32_t)(msg.data & (0xFFFFFFFF >> (32 - 32)));
+    canzero_set_bar(bar);
     break;
   }
   case 1 : {
-    if (msg.header.sof != 1 || msg.header.toggle != 0 || msg.header.eof != 1) {
+    if (msg.header.sof == 1) {
+      if (msg.header.toggle == 0 || msg.header.eof != 0) {
+        return;
+      }
+      state_tx_fragmentation_offset = 0;
+    }else {
+      state_tx_fragmentation_offset += 1;
+      if (state_tx_fragmentation_offset >= 2) {
+        return;
+      }
+    }
+    state_tx_fragmentation_buffer[state_tx_fragmentation_offset] = msg.data;
+    if (msg.header.eof == 0) {
       return;
     }
-    __oe_state = (uint8_t)(msg.data & (0xFFFFFFFF >> (32 - 8)));
-;
+    uint64_t state;
+    state = (uint64_t)state_tx_fragmentation_buffer[0] | (((uint64_t)(state_tx_fragmentation_buffer[1] & (0xFFFFFFFF >> (32 - 32)))) << 32);
+    canzero_set_state(state);
     break;
   }
   default:
@@ -317,6 +340,11 @@ static void canzero_handle_set_req(canzero_frame* frame) {
   canzero_can0_send(&resp_frame);
 
 }
+static void canzero_handle_master_stream_control(canzero_frame* frame) {
+  canzero_message_master_stream_control msg;
+  canzero_deserialize_canzero_message_master_stream_control(frame, &msg);
+  canzero_set_state(msg.secu_control);
+}
 __attribute__((weak)) void canzero_handle_heartbeat(canzero_frame* frame) {
   canzero_message_heartbeat msg;
   canzero_deserialize_canzero_message_heartbeat(frame, &msg);
@@ -325,13 +353,16 @@ void canzero_can0_poll() {
   canzero_frame frame;
   while (canzero_can0_recv(&frame)) {
     switch (frame.id) {
-      case 0xF:
+      case 0x1F:
         canzero_handle_get_req(&frame);
         break;
-      case 0xE:
+      case 0x1E:
         canzero_handle_set_req(&frame);
         break;
       case 0x13:
+        canzero_handle_master_stream_control(&frame);
+        break;
+      case 0x27:
         canzero_handle_heartbeat(&frame);
         break;
     }
@@ -350,12 +381,13 @@ uint32_t canzero_update_continue(uint32_t time){
   schedule_states_interval_job();
 
 }
-void canzero_set_state(uint8_t value) {
-  extern uint8_t __oe_state;
+void canzero_set_state(uint64_t value) {
+  extern uint64_t __oe_state;
   if (__oe_state != value) {
     __oe_state = value;
     uint32_t time = canzero_get_time();
     if (states_interval_job.climax > states_interval_job.job.stream_interval_job.last_schedule + 5) {
+      states_interval_job.climax = states_interval_job.job.stream_interval_job.last_schedule + 5;
       scheduler_promote_job(&states_interval_job);
     }
   }
