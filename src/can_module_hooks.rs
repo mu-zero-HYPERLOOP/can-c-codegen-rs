@@ -17,15 +17,15 @@ pub fn generate_hooks(
         indent.push(' ');
     }
     for bus in buses {
-        let bus_id = bus.id();
-        let can_setup_name = format!("{namespace}_can{bus_id}_setup");
+        let bus_name = bus.name();
+        let can_setup_name = format!("{namespace}_{bus_name}_setup");
         let can_setup_decl = format!("extern void {can_setup_name}(uint32_t baudrate, {namespace}_can_filter* filters, int filter_count);\n");
         header.push_str(&can_setup_decl);
 
-        let can_send_name = format!("{namespace}_can{bus_id}_send");
+        let can_send_name = format!("{namespace}_{bus_name}_send");
         let can_send_decl = format!("extern void {can_send_name}({namespace}_frame* frame);\n");
         header.push_str(&can_send_decl);
-        let can_recv_name = format!("{namespace}_can{bus_id}_recv");
+        let can_recv_name = format!("{namespace}_{bus_name}_recv");
         let can_recv_decl = format!("extern int {can_recv_name}({namespace}_frame* frame);\n");
         header.push_str(&can_recv_decl);
     }

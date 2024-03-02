@@ -18,15 +18,12 @@ pub fn generate_scheduler(network_config : &config::NetworkRef, node_config : &c
 
     let node_id = node_config.id();
     let get_resp_bus_id = network_config.get_resp_message().bus().id();
-    let command_resp_dlc = match node_config.extern_commands().first() {
-        Some(command) => command.1.tx_message().dlc(),
-        None => 1,
-    };
     let mut command_resp_send_on_bus_cases = String::new();
     for bus in network_config.buses() {
+        let bus_name = bus.name();
         let bus_id = bus.id();
         command_resp_send_on_bus_cases.push_str(&format!("{indent3}case {bus_id}:
-{indent4}{namespace}_can{bus_id}_send(&command_error_frame);
+{indent4}{namespace}_{bus_name}_send(&command_error_frame);
 {indent4}break;
 "));
     }
@@ -79,7 +76,7 @@ static void schedule_{stream_name}_interval_job(){{
                 None => panic!("tx_streams are expected to define a complete mapping"),
             }
         }
-        let stream_bus_id = tx_stream.message().bus().id();
+        let stream_bus_name = tx_stream.message().bus().name();
 
         stream_case_logic.push_str(&format!(
 "{indent3}case {stream_id}: {{
@@ -90,12 +87,14 @@ static void schedule_{stream_name}_interval_job(){{
 {write_attribs_logic}
 {indent4}{namespace}_frame stream_frame;
 {indent4}{namespace}_serialize_{namespace}_message_{node_name}_stream_{stream_name}(&stream_message, &stream_frame);
-{indent4}{namespace}_can{stream_bus_id}_send(&stream_frame);
+{indent4}{namespace}_{stream_bus_name}_send(&stream_frame);
 {indent4}break;
 {indent3}}}"));
         stream_id += 1;
     }
         
+    let heartbeat_bus_name = network_config.heartbeat_message().bus().name();
+    let get_resp_bus_name = network_config.get_resp_message().bus().name();
     source.push_str(&format!(
 "
 typedef enum {{
@@ -271,7 +270,7 @@ static void schedule_jobs(uint32_t time) {{
 {indent3}heartbeat.node_id = {node_id};
 {indent3}{namespace}_frame heartbeat_frame;
 {indent3}{namespace}_serialize_{namespace}_message_heartbeat(&heartbeat, &heartbeat_frame);
-{indent3}{namespace}_can{heartbeat_bus_id}_send(&heartbeat_frame);
+{indent3}{namespace}_{heartbeat_bus_name}_send(&heartbeat_frame);
 {indent3}break;
 {indent2}}}
 {indent2}case GET_RESP_FRAGMENTATION_JOB_TAG: {{
@@ -294,7 +293,7 @@ static void schedule_jobs(uint32_t time) {{
 {indent3}{namespace}_exit_critical();
 {indent3}canzero_frame fragmentation_frame;
 {indent3}{namespace}_serialize_{namespace}_message_get_resp(&fragmentation_response, &fragmentation_frame);
-{indent3}canzero_can{get_resp_bus_id}_send(&fragmentation_frame);
+{indent3}canzero_{get_resp_bus_name}_send(&fragmentation_frame);
 {indent3}break;
 {indent2}}}
 {indent2}default:

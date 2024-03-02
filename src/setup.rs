@@ -21,9 +21,9 @@ pub fn generate_setup(node_config : &config::NodeRef, network_config : &config::
 
     let mut setup_cans = String::new();
     for bus in network_config.buses() {
-        let bus_id = bus.id();
+        let bus_name = bus.name();
         let baudrate = bus.baudrate();
-        setup_cans.push_str(&format!("{indent}{namespace}_can{bus_id}_setup({baudrate}, NULL, 0);\n"));
+        setup_cans.push_str(&format!("{indent}{namespace}_{bus_name}_setup({baudrate}, NULL, 0);\n"));
     }
 
     let mut schedule_stream_jobs_logic = String::new();

@@ -489,6 +489,7 @@ pub fn generate_rx_handlers(
                 }
                 case_logic += &format!("{indent}}}\n");
                 let node_id = node_config.id();
+                let resp_bus_name = network_config.get_resp_message().bus().name();
                 logic += &format!(
                     "{indent}if (msg.header.server_id != {node_id}) {{
 {indent2}return;
@@ -499,7 +500,7 @@ pub fn generate_rx_handlers(
 {indent}resp.header.server_id = msg.header.server_id;
 {indent}{frame_type_name} resp_frame;
 {indent}{namespace}_serialize_{namespace}_message_get_resp(&resp, &resp_frame);
-{indent}{namespace}_can{resp_bus_id}_send(&resp_frame);
+{indent}{namespace}_{resp_bus_name}_send(&resp_frame);
 "
                 );
                 (logic, false)
@@ -760,7 +761,7 @@ pub fn generate_rx_handlers(
                     }
                 }
                 case_logic.push_str(&format!("{indent}default:\n{indent2}return;\n{indent}}}"));
-                let resp_bus_id = network_config.set_resp_message().bus().id();
+                let resp_bus_name = network_config.set_resp_message().bus().name();
                 let logic = format!(
                     "{indent}if (msg.header.server_id != {node_id}) {{
 {indent2}return;
@@ -773,7 +774,7 @@ pub fn generate_rx_handlers(
 {indent}resp.header.erno = set_resp_erno_Success;
 {indent}canzero_frame resp_frame;
 {indent}{namespace}_serialize_{namespace}_message_set_resp(&resp, &resp_frame);
-{indent}{namespace}_can{resp_bus_id}_send(&resp_frame);\n
+{indent}{namespace}_{resp_bus_name}_send(&resp_frame);\n
 "
                 );
 

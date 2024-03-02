@@ -23,6 +23,7 @@ pub fn generate_poll(
 
     for bus in buses {
         let bus_id = bus.id();
+        let bus_name = bus.name();
         let poll_func_name = format!("{namespace}_can{bus_id}_poll");
         let poll_func_decl = format!("void {poll_func_name}();\n");
         header.push_str(&poll_func_decl);
@@ -30,7 +31,7 @@ pub fn generate_poll(
         let mut poll_func_def = format!("void {poll_func_name}() {{\n");
         poll_func_def.push_str(&format!("{indent}{namespace}_frame frame;\n"));
         poll_func_def.push_str(&format!(
-            "{indent}while ({namespace}_can{bus_id}_recv(&frame)) {{\n"
+            "{indent}while ({namespace}_{bus_name}_recv(&frame)) {{\n"
         ));
         poll_func_def.push_str(&format!(
             "{indent2}switch (frame.id) {{\n"

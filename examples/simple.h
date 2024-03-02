@@ -50,9 +50,9 @@ typedef struct {
   uint32_t mask;
   uint32_t id;
 } canzero_can_filter;
-extern void canzero_can0_setup(uint32_t baudrate, canzero_can_filter* filters, int filter_count);
-extern void canzero_can0_send(canzero_frame* frame);
-extern int canzero_can0_recv(canzero_frame* frame);
+extern void canzero_bus_setup(uint32_t baudrate, canzero_can_filter* filters, int filter_count);
+extern void canzero_bus_send(canzero_frame* frame);
+extern int canzero_bus_recv(canzero_frame* frame);
 extern void canzero_request_update(uint32_t time);
 extern uint32_t canzero_get_time();
 extern void canzero_enter_critical();

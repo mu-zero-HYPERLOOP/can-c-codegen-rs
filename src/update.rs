@@ -24,7 +24,7 @@ pub fn generate_update(
         "uint32_t {can_update_continue_name}(uint32_t time){{
 {indent}schedule_jobs(time);
 {indent}return scheduler_next_job_timeout();
-}}");
+}}\n");
     source.push_str(&can_update_continue_def);
 
     Ok(())

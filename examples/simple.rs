@@ -6,6 +6,7 @@ use can_c_codegen_rs::options::Options;
 
 fn main() {
     let network_builder = can_config_rs::builder::NetworkBuilder::new();
+    network_builder.create_bus("bus", Some(1000000));
     let secu = network_builder.create_node("secu");
     secu.create_object_entry("bar", "u32");
     secu.create_object_entry("state", "u64");

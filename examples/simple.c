@@ -189,7 +189,7 @@ static void schedule_jobs(uint32_t time) {
         stream_message.bar = __oe_bar;
         canzero_frame stream_frame;
         canzero_serialize_canzero_message_secu_stream_something(&stream_message, &stream_frame);
-        canzero_can0_send(&stream_frame);
+        canzero_bus_send(&stream_frame);
         break;
       }
       case 1: {
@@ -200,7 +200,7 @@ static void schedule_jobs(uint32_t time) {
         stream_message.state = __oe_state;
         canzero_frame stream_frame;
         canzero_serialize_canzero_message_secu_stream_states(&stream_message, &stream_frame);
-        canzero_can0_send(&stream_frame);
+        canzero_bus_send(&stream_frame);
         break;
       }
       default:
@@ -216,7 +216,7 @@ static void schedule_jobs(uint32_t time) {
       heartbeat.node_id = 0;
       canzero_frame heartbeat_frame;
       canzero_serialize_canzero_message_heartbeat(&heartbeat, &heartbeat_frame);
-      canzero_can0_send(&heartbeat_frame);
+      canzero_bus_send(&heartbeat_frame);
       break;
     }
     case GET_RESP_FRAGMENTATION_JOB_TAG: {
@@ -239,7 +239,7 @@ static void schedule_jobs(uint32_t time) {
       canzero_exit_critical();
       canzero_frame fragmentation_frame;
       canzero_serialize_canzero_message_get_resp(&fragmentation_response, &fragmentation_frame);
-      canzero_can0_send(&fragmentation_frame);
+      canzero_bus_send(&fragmentation_frame);
       break;
     }
     default:
@@ -286,10 +286,10 @@ static void canzero_handle_get_req(canzero_frame* frame) {
   resp.header.server_id = msg.header.server_id;
   canzero_frame resp_frame;
   canzero_serialize_canzero_message_get_resp(&resp, &resp_frame);
-  canzero_can0_send(&resp_frame);
+  canzero_bus_send(&resp_frame);
 }
-static uint32_t state_tx_fragmentation_buffer[2];
-static uint32_t state_tx_fragmentation_offset = 0;
+static uint32_t state_tmp_tx_fragmentation_buffer[2];
+static uint32_t state_tmp_tx_fragmentation_offset = 0;
 static void canzero_handle_set_req(canzero_frame* frame) {
   canzero_message_set_req msg;
   canzero_deserialize_canzero_message_set_req(frame, &msg);
@@ -302,9 +302,9 @@ static void canzero_handle_set_req(canzero_frame* frame) {
     if (msg.header.sof != 1 || msg.header.toggle != 0 || msg.header.eof != 1) {
       return;
     }
-    uint32_t bar;
-    bar = (uint32_t)(msg.data & (0xFFFFFFFF >> (32 - 32)));
-    canzero_set_bar(bar);
+    uint32_t bar_tmp;
+    bar_tmp = (uint32_t)(msg.data & (0xFFFFFFFF >> (32 - 32)));
+    canzero_set_bar(bar_tmp);
     break;
   }
   case 1 : {
@@ -312,20 +312,20 @@ static void canzero_handle_set_req(canzero_frame* frame) {
       if (msg.header.toggle == 0 || msg.header.eof != 0) {
         return;
       }
-      state_tx_fragmentation_offset = 0;
+      state_tmp_tx_fragmentation_offset = 0;
     }else {
-      state_tx_fragmentation_offset += 1;
-      if (state_tx_fragmentation_offset >= 2) {
+      state_tmp_tx_fragmentation_offset += 1;
+      if (state_tmp_tx_fragmentation_offset >= 2) {
         return;
       }
     }
-    state_tx_fragmentation_buffer[state_tx_fragmentation_offset] = msg.data;
+    state_tmp_tx_fragmentation_buffer[state_tmp_tx_fragmentation_offset] = msg.data;
     if (msg.header.eof == 0) {
       return;
     }
-    uint64_t state;
-    state = (uint64_t)state_tx_fragmentation_buffer[0] | (((uint64_t)(state_tx_fragmentation_buffer[1] & (0xFFFFFFFF >> (32 - 32)))) << 32);
-    canzero_set_state(state);
+    uint64_t state_tmp;
+    state_tmp = (uint64_t)state_tmp_tx_fragmentation_buffer[0] | (((uint64_t)(state_tmp_tx_fragmentation_buffer[1] & (0xFFFFFFFF >> (32 - 32)))) << 32);
+    canzero_set_state(state_tmp);
     break;
   }
   default:
@@ -337,7 +337,7 @@ static void canzero_handle_set_req(canzero_frame* frame) {
   resp.header.erno = set_resp_erno_Success;
   canzero_frame resp_frame;
   canzero_serialize_canzero_message_set_resp(&resp, &resp_frame);
-  canzero_can0_send(&resp_frame);
+  canzero_bus_send(&resp_frame);
 
 }
 static void canzero_handle_master_stream_control(canzero_frame* frame) {
@@ -351,7 +351,7 @@ __attribute__((weak)) void canzero_handle_heartbeat(canzero_frame* frame) {
 }
 void canzero_can0_poll() {
   canzero_frame frame;
-  while (canzero_can0_recv(&frame)) {
+  while (canzero_bus_recv(&frame)) {
     switch (frame.id) {
       case 0x1F:
         canzero_handle_get_req(&frame);
@@ -371,8 +371,9 @@ void canzero_can0_poll() {
 uint32_t canzero_update_continue(uint32_t time){
   schedule_jobs(time);
   return scheduler_next_job_timeout();
-}void canzero_init() {
-  canzero_can0_setup(1000000, NULL, 0);
+}
+void canzero_init() {
+  canzero_bus_setup(1000000, NULL, 0);
 
   job_pool_allocator_init();
   scheduler.size = 0;
