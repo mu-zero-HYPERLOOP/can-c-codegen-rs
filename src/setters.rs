@@ -1,5 +1,5 @@
 use can_config_rs::config::stream::StreamRef;
-use can_config_rs::config::NodeRef;
+use can_config_rs::config::{NodeRef, Type};
 
 use crate::errors::Result;
 use crate::options::Options;
@@ -50,9 +50,25 @@ pub fn generate_setters(
 
 
             let mut setter_def = format!("void {setter_name}({type_name} value) {{\n");
+            
+            fn gen_condition(left : &str, right : &str, ty: &Type) -> String{
+                match ty {
+                    Type::Enum { name : _, description : _, size : _, entries : _, visibility : _ } |
+                    Type::Primitive(_) => format!("{left} != {right}"),
+                    Type::Struct { name : _, description : _, attribs, visibility : _ } => {
+                        attribs.iter().map(|(attrib_name, attrib_ty)| {
+                            gen_condition(&format!("{left}.{attrib_name}"), &format!("{right}.{attrib_name}"), attrib_ty)
+                        }).fold("0".to_owned(), |acc, x| format!("{acc} || {x}"))
+                    },
+                    Type::Array { len : _, ty : _ } => panic!(),
+                }
+            }
+
+            let condition = gen_condition(&oe_var, "value", object_entry.ty());
+
             setter_def.push_str(&format!(
 "{indent}extern {type_name} {oe_var};
-{indent}if ({oe_var} != value) {{
+{indent}if ({condition}) {{
 {indent2}{oe_var} = value;
 {indent2}uint32_t time = {namespace}_get_time();
 "));
