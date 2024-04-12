@@ -267,7 +267,7 @@ static void schedule_jobs(uint32_t time) {{
 {indent3}scheduler_reschedule(time + heartbeat_interval);
 {indent3}{namespace}_exit_critical();
 {indent3}{namespace}_message_heartbeat heartbeat;
-{indent3}heartbeat.node_id = {node_id};
+{indent3}heartbeat.node_id = node_id_{node_name};
 {indent3}{namespace}_frame heartbeat_frame;
 {indent3}{namespace}_serialize_{namespace}_message_heartbeat(&heartbeat, &heartbeat_frame);
 {indent3}{namespace}_{heartbeat_bus_name}_send(&heartbeat_frame);
