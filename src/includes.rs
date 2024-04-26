@@ -17,8 +17,8 @@ pub fn generate_includes(
         .to_owned();
     source.push_str(&format!("#include \"{header_name}\"\n"));
     
-    header.push_str("#include \"inttypes.h\"\n");
-    header.push_str("#include \"stddef.h\"\n");
+    header.push_str("#include <cinttypes>\n");
+    header.push_str("#include <cstddef>\n");
 
     Ok(())
 }

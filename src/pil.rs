@@ -13,7 +13,6 @@ pub fn generate_pil(
     for _ in 0..options.indent() {
         indent.push(' ');
     }
-    let indent2 = format!("{indent}{indent}");
 
     // =====================can_frame definition===================
     let can_frame_name = format!("{namespace}_frame");
@@ -26,7 +25,6 @@ pub fn generate_pil(
     );
     header.push_str(&can_frame_type_def);
 
-    let can_frame_id_bits_name = format!("{namespace}_frame_id_bits");
     let can_frame_id_bits_def = format!(
         "typedef enum : uint32_t {{
 {indent}{}_FRAME_IDE_BIT = 0x40000000, // 1 << 30

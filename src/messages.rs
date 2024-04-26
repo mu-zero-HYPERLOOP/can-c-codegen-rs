@@ -35,14 +35,14 @@ pub fn generate_messages(
                 for attrib in encoding.attributes() {
                     let attrib_type_name = to_c_type_name(attrib.ty());
                     let attrib_name = attrib.name();
-                    type_def.push_str(&format!("{indent}{attrib_type_name} {attrib_name};\n"));
+                    type_def.push_str(&format!("{indent}{attrib_type_name} m_{attrib_name};\n"));
                 }
             }
             None => {
                 for signal in message.signals() {
                     let signal_type_name = signal_type_to_c_type(signal.ty());
                     let signal_name = signal.name();
-                    type_def.push_str(&format!("{indent}{signal_type_name} {signal_name};\n"));
+                    type_def.push_str(&format!("{indent}{signal_type_name} m_{signal_name};\n"));
                 }
             }
         }
@@ -88,7 +88,7 @@ pub fn generate_messages(
                     match attrib {
                         TypeSignalEncoding::Composite(composite) => {
                             let attrib_name = composite.name();
-                            let attrib_prefix = format!("{attribute_prefix}{attrib_name}.");
+                            let attrib_prefix = format!("{attribute_prefix}{attrib_name}.m_");
                             for attrib in composite.attributes() {
                                 write_attribute_parse_code(
                                     serialized_def,
@@ -111,6 +111,7 @@ pub fn generate_messages(
                                         SignalType::SignedInt { size: _ } => {
                                             format!("{attribute_prefix}{attrib_name}")
                                         }
+
                                         SignalType::Decimal {
                                             size,
                                             offset,
@@ -281,7 +282,7 @@ pub fn generate_messages(
                         &mut serialize_def,
                         attrib,
                         &indent,
-                        "msg->",
+                        "msg->m_",
                         &mut attrib_offset,
                     );
                 }
@@ -292,10 +293,10 @@ pub fn generate_messages(
                     let signal_name = signal.name();
                     let var = match signal.ty() {
                         SignalType::UnsignedInt { size: _ } => {
-                            format!("msg->{signal_name}")
+                            format!("msg->m_{signal_name}")
                         }
                         SignalType::SignedInt { size: _ } => {
-                            format!("msg->{signal_name}")
+                            format!("msg->m_{signal_name}")
                         }
                         SignalType::Decimal {
                             size,
@@ -303,9 +304,9 @@ pub fn generate_messages(
                             scale,
                         } => {
                             if *size <= 32 {
-                                format!("(uint32_t)(msg->{signal_name} * {scale} + {offset})")
+                                format!("(uint32_t)(msg->m_{signal_name} * {scale} + {offset})")
                             } else {
-                                format!("(uint64_t)(msg->{signal_name} * {scale} + {offset})")
+                                format!("(uint64_t)(msg->m_{signal_name} * {scale} + {offset})")
                             }
                         }
                     };
@@ -385,7 +386,7 @@ pub fn generate_messages(
                     match attrib {
                         TypeSignalEncoding::Composite(composite) => {
                             let attrib_name = composite.name();
-                            let attrib_prefix = format!("{attribute_prefix}{attrib_name}.");
+                            let attrib_prefix = format!("{attribute_prefix}{attrib_name}.m_");
                             for attrib in composite.attributes() {
                                 write_attribute_write_code(
                                     deserialized_def,
@@ -488,7 +489,7 @@ pub fn generate_messages(
                         &mut deserialize_def,
                         attrib,
                         &indent,
-                        "msg->",
+                        "msg->m_",
                         &mut attrib_offset,
                     );
                 }

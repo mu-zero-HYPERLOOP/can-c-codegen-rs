@@ -53,8 +53,8 @@ static void schedule_{stream_name}_interval_job(){{
 {indent}uint32_t time = {namespace}_get_time();
 {indent}{stream_name}_interval_job.climax = time + {stream_name}_interval;
 {indent}{stream_name}_interval_job.tag = STREAM_INTERVAL_JOB_TAG;
-{indent}{stream_name}_interval_job.job.stream_interval_job.stream_id = {stream_id};
-{indent}{stream_name}_interval_job.job.stream_interval_job.last_schedule = time;
+{indent}{stream_name}_interval_job.job.stream_job.stream_id = {stream_id};
+{indent}{stream_name}_interval_job.job.stream_job.last_schedule = time;
 {indent}scheduler_schedule(&{stream_name}_interval_job);
 }}
 "));
@@ -71,7 +71,7 @@ static void schedule_{stream_name}_interval_job(){{
                     let oe_name = object_entry.name();
                     let oe_var = format!("__oe_{oe_name}");
                     let msg_attrib = encoding.name();
-                    write_attribs_logic.push_str(&format!("{indent4}stream_message.{msg_attrib} = {oe_var};"));
+                    write_attribs_logic.push_str(&format!("{indent4}stream_message.m_{msg_attrib} = {oe_var};"));
                 }
                 None => panic!("tx_streams are expected to define a complete mapping"),
             }
@@ -80,7 +80,7 @@ static void schedule_{stream_name}_interval_job(){{
 
         stream_case_logic.push_str(&format!(
 "{indent3}case {stream_id}: {{
-{indent4}job->job.stream_interval_job.last_schedule = time;
+{indent4}job->job.stream_job.last_schedule = time;
 {indent4}scheduler_reschedule(time + {stream_max_interval});
 {indent4}{namespace}_exit_critical();
 {indent4}{namespace}_message_{node_name}_stream_{stream_name} stream_message;
@@ -123,7 +123,7 @@ typedef struct {{
   job_tag tag;
   union {{
     get_resp_fragmentation_job get_fragmentation_job;
-    stream_interval_job stream_interval_job;
+    stream_interval_job stream_job;
   }} job;
 }} job_t;
 union job_pool_allocator_entry {{
@@ -255,7 +255,7 @@ static void schedule_jobs(uint32_t time) {{
 {indent2}}}
 {indent2}switch (job->tag) {{
 {indent2}case STREAM_INTERVAL_JOB_TAG: {{
-{indent3}switch (job->job.stream_interval_job.stream_id) {{
+{indent3}switch (job->job.stream_job.stream_id) {{
 {stream_case_logic}
 {indent3}default:
 {indent4}{namespace}_exit_critical();
@@ -267,7 +267,7 @@ static void schedule_jobs(uint32_t time) {{
 {indent3}scheduler_reschedule(time + heartbeat_interval);
 {indent3}{namespace}_exit_critical();
 {indent3}{namespace}_message_heartbeat heartbeat;
-{indent3}heartbeat.node_id = node_id_{node_name};
+{indent3}heartbeat.m_node_id = node_id_{node_name};
 {indent3}{namespace}_frame heartbeat_frame;
 {indent3}{namespace}_serialize_{namespace}_message_heartbeat(&heartbeat, &heartbeat_frame);
 {indent3}{namespace}_{heartbeat_bus_name}_send(&heartbeat_frame);
@@ -276,18 +276,18 @@ static void schedule_jobs(uint32_t time) {{
 {indent2}case GET_RESP_FRAGMENTATION_JOB_TAG: {{
 {indent3}get_resp_fragmentation_job *fragmentation_job = &job->job.get_fragmentation_job;
 {indent3}{namespace}_message_get_resp fragmentation_response;
-{indent3}fragmentation_response.header.sof = 0;
-{indent3}fragmentation_response.header.toggle = fragmentation_job->offset % 2;
-{indent3}fragmentation_response.header.od_index = fragmentation_job->od_index;
-{indent3}fragmentation_response.header.client_id = 0x{node_id:X};
-{indent3}fragmentation_response.header.server_id = fragmentation_job->server_id;
-{indent3}fragmentation_response.data = fragmentation_job->buffer[fragmentation_job->offset];
+{indent3}fragmentation_response.m_header.m_sof = 0;
+{indent3}fragmentation_response.m_header.m_toggle = fragmentation_job->offset % 2;
+{indent3}fragmentation_response.m_header.m_od_index = fragmentation_job->od_index;
+{indent3}fragmentation_response.m_header.m_client_id = 0x{node_id:X};
+{indent3}fragmentation_response.m_header.m_server_id = fragmentation_job->server_id;
+{indent3}fragmentation_response.m_data = fragmentation_job->buffer[fragmentation_job->offset];
 {indent3}fragmentation_job->offset += 1;
 {indent3}if (fragmentation_job->offset == fragmentation_job->size) {{
-{indent4}fragmentation_response.header.eof = 1;
+{indent4}fragmentation_response.m_header.m_eof = 1;
 {indent4}scheduler_unschedule();
 {indent3}}} else {{
-{indent4}fragmentation_response.header.eof = 0;
+{indent4}fragmentation_response.m_header.m_eof = 0;
 {indent4}scheduler_reschedule(time + get_resp_fragmentation_interval);
 {indent3}}}
 {indent3}{namespace}_exit_critical();

@@ -46,7 +46,9 @@ pub fn generate_rx_handlers(
 
                     let msg_attribute = encoding.name();
 
-                    logic += &format!("{indent}{namespace}_set_{object_entry_name}(msg.{msg_attribute});\n");
+                    logic += &format!(
+                        "{indent}{namespace}_set_{object_entry_name}(msg.{msg_attribute});\n"
+                    );
                     // logic += &format!("{indent}{object_entry_var} = msg.{msg_attribute};\n");
                 }
                 (logic, false)
@@ -90,7 +92,7 @@ pub fn generate_rx_handlers(
                 let mut logic = String::new();
                 let resp = network_config.get_resp_message();
                 let resp_bus_id = resp.bus().id();
-                let mut case_logic = format!("{indent}switch (msg.header.od_index) {{\n");
+                let mut case_logic = format!("{indent}switch (msg.m_header.m_od_index) {{\n");
                 for object_entry in node_config.object_entries() {
                     let name = object_entry.name();
                     let var = format!("__oe_{name}");
@@ -110,16 +112,16 @@ pub fn generate_rx_handlers(
                                         config::SignalType::UnsignedInt { size } => {
                                             let parse_uint = if *size <= 8 {
                                                 format!(
-                                                    "{indent2}resp.data |= ((uint32_t)({oe_name} \
+                                                    "{indent2}resp.m_data |= ((uint32_t)({oe_name} \
                                                     & (0xFF >> (8 - {size})))) << {bit_offset};\n"
                                                 )
                                             } else if *size <= 16 {
                                                 format!(
-                                                    "{indent2}resp.data |= ((uint32_t)({oe_name} \
+                                                    "{indent2}resp.m_data |= ((uint32_t)({oe_name} \
                                                     & (0xFFFF >> (16 - {size})))) << {bit_offset};\n")
                                             } else if *size <= 32 {
                                                 format!(
-                                                    "{indent2}resp.data |= ({oe_name} & \
+                                                    "{indent2}resp.m_data |= ({oe_name} & \
                                                     (0xFFFFFFFF >> (32 - {size}))) << {bit_offset};\n")
                                             } else if *size <= 64 {
                                                 panic!("values larger than 32 should be send in fragmented mode")
@@ -131,13 +133,13 @@ pub fn generate_rx_handlers(
                                         }
                                         config::SignalType::SignedInt { size } => {
                                             let parse_int = if *size <= 8 {
-                                                format!("{indent2}resp.data |= ((uint32_t)(((uint8_t){oe_name}) \
+                                                format!("{indent2}resp.m_data |= ((uint32_t)(((uint8_t){oe_name}) \
                                                     & (0xFF >> (8 - {size})))) << {bit_offset};\n")
                                             } else if *size <= 16 {
-                                                format!("{indent2}resp.data |= ((uint32_t)(((uint16_t){oe_name}) \
+                                                format!("{indent2}resp.m_data |= ((uint32_t)(((uint16_t){oe_name}) \
                                                     & (0xFFFF >> (16 - {size})))) << {bit_offset};\n")
                                             } else if *size <= 32 {
-                                                format!("{indent2}resp.data |= ((uint32_t)(((uint32_t){oe_name}) \
+                                                format!("{indent2}resp.m_data |= ((uint32_t)(((uint32_t){oe_name}) \
                                                     & (0xFFFFFFFF >> (32 - {size})))) << {bit_offset};\n")
                                             } else if *size <= 64 {
                                                 panic!("values larger than 32 should be send in fragmented mode")
@@ -154,7 +156,7 @@ pub fn generate_rx_handlers(
                                         } => {
                                             let parse_dec = if *size <= 32 {
                                                 format!(
-                                                    "{indent2}resp.data |= ((uint32_t)(({oe_name} \
+                                                    "{indent2}resp.m_data |= ((uint32_t)(({oe_name} \
                                                     - ({offset})) / {scale})) << {bit_offset};\n"
                                                 )
                                             } else if *size <= 64 {
@@ -174,7 +176,7 @@ pub fn generate_rx_handlers(
                                     visibility: _,
                                 } => {
                                     for (attr_name, attr_type) in attribs {
-                                        let oe_name = oe_name.to_owned() + "." + attr_name;
+                                        let oe_name = oe_name.to_owned() + ".m_" + attr_name;
                                         generate_parse_logic(
                                             parse_code, &oe_name, attr_type, bit_offset, indent2,
                                         );
@@ -189,18 +191,18 @@ pub fn generate_rx_handlers(
                                 } => {
                                     let parse_enum = if *size <= 8 {
                                         format!(
-                                            "{indent2}resp.data |= \
+                                            "{indent2}resp.m_data |= \
                                                 ((uint32_t)(((uint8_t){oe_name}) \
                                                 & (0xFF >> (8 - {size})))) << {bit_offset};\n"
                                         )
                                     } else if *size <= 16 {
                                         format!(
-                                            "{indent2}resp.data |= \
+                                            "{indent2}resp.m_data |= \
                                                 ((uint32_t)(((uint16_t){oe_name}) \
                                                 & (0xFFFF >> (16 - {size})))) << {bit_offset};\n"
                                         )
                                     } else if *size <= 32 {
-                                        format!("{indent2}resp.data |= \
+                                        format!("{indent2}resp.m_data |= \
                                                 (((uint32_t){oe_name}) \
                                                  & (0xFFFFFFFF >> (32 - {size}))) << {bit_offset};\n")
                                     } else if *size <= 64 {
@@ -229,9 +231,9 @@ pub fn generate_rx_handlers(
 
                         case_logic += &format!(
                             "{indent}case {id}: {{\n\
-                                {parse_code}{indent2}resp.header.sof = 1;\n\
-                                {indent2}resp.header.eof = 1;\n\
-                                {indent2}resp.header.toggle = 0;\n\
+                                {parse_code}{indent2}resp.m_header.m_sof = 1;\n\
+                                {indent2}resp.m_header.m_eof = 1;\n\
+                                {indent2}resp.m_header.m_toggle = 0;\n\
                                 {indent2}break;\n\
                                 {indent}}}\n"
                         );
@@ -451,7 +453,7 @@ pub fn generate_rx_handlers(
                                         generate_fragmentation_logic(
                                             logic,
                                             &attrib_ty,
-                                            &format!("{var}.{attrib_name}"),
+                                            &format!("{var}.m_{attrib_name}"),
                                             buffer,
                                             bit_offset,
                                             indent2,
@@ -477,11 +479,11 @@ pub fn generate_rx_handlers(
                         case_logic += &format!(
                             "{indent}case {id}: {{
 {fragmentation_logic}
-{indent2}resp.data = {buffer_name}[0];
-{indent2}resp.header.sof = 1;
-{indent2}resp.header.eof = 0;
-{indent2}resp.header.toggle = 0;
-{indent2}schedule_get_resp_fragmentation_job({buffer_name}, {buffer_size}, {od_index}, msg.header.server_id);
+{indent2}resp.m_data = {buffer_name}[0];
+{indent2}resp.m_header.m_sof = 1;
+{indent2}resp.m_header.m_eof = 0;
+{indent2}resp.m_header.m_toggle = 0;
+{indent2}schedule_get_resp_fragmentation_job({buffer_name}, {buffer_size}, {od_index}, msg.m_header.m_server_id);
 {indent2}break;
 {indent}}}\n"
                         );
@@ -491,13 +493,13 @@ pub fn generate_rx_handlers(
                 let node_id = node_config.id();
                 let resp_bus_name = network_config.get_resp_message().bus().name();
                 logic += &format!(
-                    "{indent}if (msg.header.server_id != {node_id}) {{
+                    "{indent}if (msg.m_header.m_server_id != {node_id}) {{
 {indent2}return;
 {indent}}}
 {indent}{namespace}_message_get_resp resp;
-{case_logic}{indent}resp.header.od_index = msg.header.od_index;
-{indent}resp.header.client_id = msg.header.client_id;
-{indent}resp.header.server_id = msg.header.server_id;
+{case_logic}{indent}resp.m_header.m_od_index = msg.m_header.m_od_index;
+{indent}resp.m_header.m_client_id = msg.m_header.m_client_id;
+{indent}resp.m_header.m_server_id = msg.m_header.m_server_id;
 {indent}{frame_type_name} resp_frame;
 {indent}{namespace}_serialize_{namespace}_message_get_resp(&resp, &resp_frame);
 {indent}{namespace}_{resp_bus_name}_send(&resp_frame);
@@ -508,7 +510,7 @@ pub fn generate_rx_handlers(
             message::MessageUsage::SetResp => panic!(),
             message::MessageUsage::SetReq => {
                 let node_id = node_config.id();
-                let mut case_logic = format!("{indent}switch (msg.header.od_index) {{\n");
+                let mut case_logic = format!("{indent}switch (msg.m_header.m_od_index) {{\n");
                 for object_entry in node_config.object_entries() {
                     let od_index = object_entry.id();
                     let size = ty_size(object_entry.ty());
@@ -529,7 +531,7 @@ pub fn generate_rx_handlers(
                                     let size = signal_type.size() as usize;
 
                                     let masked_val =
-                                        format!("(msg.data & (0xFFFFFFFF >> (32 - {size})))");
+                                        format!("(msg.m_data & (0xFFFFFFFF >> (32 - {size})))");
 
                                     let parsed_val = match signal_type {
                                         config::SignalType::UnsignedInt { size } => {
@@ -589,7 +591,7 @@ pub fn generate_rx_handlers(
                                         generate_parse_logic(
                                             parse_logic,
                                             attrib_ty,
-                                            &format!("{var}.{attrib_name}"),
+                                            &format!("{var}.m_{attrib_name}"),
                                             attrib_offset,
                                         );
                                     }
@@ -604,7 +606,7 @@ pub fn generate_rx_handlers(
                                     let size = *size as usize;
 
                                     let masked_val =
-                                        format!("(msg.data & (0xFFFFFFFF >> (32 - {size})))");
+                                        format!("(msg.m_data & (0xFFFFFFFF >> (32 - {size})))");
 
                                     let parsed_val = format!("({name})({masked_val})");
                                     parse_logic.push_str(&format!("{var} = {parsed_val};\n"));
@@ -613,10 +615,15 @@ pub fn generate_rx_handlers(
                                 Type::Array { len: _, ty: _ } => todo!(),
                             }
                         }
-                        generate_parse_logic(&mut parse_logic, object_entry.ty(), &format!("{indent2}{oe_var}"), &mut 0);
+                        generate_parse_logic(
+                            &mut parse_logic,
+                            object_entry.ty(),
+                            &format!("{indent2}{oe_var}"),
+                            &mut 0,
+                        );
                         case_logic.push_str(&format!(
                             "{indent}case {od_index} : {{
-{indent2}if (msg.header.sof != 1 || msg.header.toggle != 0 || msg.header.eof != 1) {{
+{indent2}if (msg.m_header.m_sof != 1 || msg.m_header.m_toggle != 0 || msg.m_header.m_eof != 1) {{
 {indent3}return;
 {indent2}}}
 {indent2}{parse_logic}{indent2}{namespace}_set_{oe_name}({oe_var});
@@ -688,7 +695,7 @@ pub fn generate_rx_handlers(
                                             attrib_ty,
                                             bit_offset,
                                             buffer_name,
-                                            &format!("{var}.{attrib_name}"),
+                                            &format!("{var}.m_{attrib_name}"),
                                             indent,
                                         )
                                     }
@@ -737,8 +744,8 @@ pub fn generate_rx_handlers(
 
                         case_logic.push_str(&format!(
                             "{indent}case {od_index} : {{
-{indent2}if (msg.header.sof == 1) {{
-{indent3}if (msg.header.toggle == 0 || msg.header.eof != 0) {{
+{indent2}if (msg.m_header.m_sof == 1) {{
+{indent3}if (msg.m_header.m_toggle == 0 || msg.m_header.m_eof != 0) {{
 {indent4}return;
 {indent3}}}
 {indent3}{buffer_offset} = 0;
@@ -748,8 +755,8 @@ pub fn generate_rx_handlers(
 {indent4}return;
 {indent3}}}
 {indent2}}}
-{indent2}{buffer_name}[{buffer_offset}] = msg.data;
-{indent2}if (msg.header.eof == 0) {{
+{indent2}{buffer_name}[{buffer_offset}] = msg.m_data;
+{indent2}if (msg.m_header.m_eof == 0) {{
 {indent3}return;
 {indent2}}}
 {indent2}{oe_ty} {oe_var};
@@ -763,15 +770,15 @@ pub fn generate_rx_handlers(
                 case_logic.push_str(&format!("{indent}default:\n{indent2}return;\n{indent}}}"));
                 let resp_bus_name = network_config.set_resp_message().bus().name();
                 let logic = format!(
-                    "{indent}if (msg.header.server_id != {node_id}) {{
+                    "{indent}if (msg.m_header.m_server_id != {node_id}) {{
 {indent2}return;
 {indent}}}
 {indent}{namespace}_message_set_resp resp;
 {case_logic}
-{indent}resp.header.od_index = msg.header.od_index;
-{indent}resp.header.client_id = msg.header.client_id;
-{indent}resp.header.server_id = msg.header.server_id;
-{indent}resp.header.erno = set_resp_erno_Success;
+{indent}resp.m_header.m_od_index = msg.m_header.m_od_index;
+{indent}resp.m_header.m_client_id = msg.m_header.m_client_id;
+{indent}resp.m_header.m_server_id = msg.m_header.m_server_id;
+{indent}resp.m_header.m_erno = set_resp_erno_Success;
 {indent}canzero_frame resp_frame;
 {indent}{namespace}_serialize_{namespace}_message_set_resp(&resp, &resp_frame);
 {indent}{namespace}_{resp_bus_name}_send(&resp_frame);\n

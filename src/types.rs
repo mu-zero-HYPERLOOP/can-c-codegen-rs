@@ -24,9 +24,8 @@ pub fn generate_types(
             } => {
                 let mut def = format!("typedef struct {{\n");
                 for (attrib_name, attrib_type) in attribs {
-                    let attrib_type_name = attrib_type.name();
                     let ctype = to_c_type_name(attrib_type);
-                    def.push_str(&format!("{indent}{ctype} {attrib_name};\n"));
+                    def.push_str(&format!("{indent}{ctype} m_{attrib_name};\n"));
                 }
                 def.push_str(&format!("}} {name};\n"));
                 header.push_str(&def);
