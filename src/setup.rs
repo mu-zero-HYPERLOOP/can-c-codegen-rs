@@ -39,7 +39,7 @@ pub fn generate_setup(node_config : &config::NodeRef, network_config : &config::
     let config_hash = hasher.finish();
 
     let init_def = format!("void {init_name}() {{
-__oe_config_hash = {config_hash};
+__oe_config_hash = {config_hash}ull;
 {setup_cans}
 {indent}job_pool_allocator_init();
 {indent}scheduler.size = 0;
