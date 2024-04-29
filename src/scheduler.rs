@@ -107,7 +107,7 @@ typedef struct {{
   uint8_t offset;
   uint8_t size;
   uint8_t od_index;
-  uint8_t server_id;
+  uint8_t client_id;
 }} get_resp_fragmentation_job;
 typedef struct {{
   uint32_t command_resp_msg_id;
@@ -226,7 +226,7 @@ static void scheduler_unschedule() {{
 {indent}scheduler_reschedule(scheduler.heap[0]->climax);
 }}
 static const uint32_t get_resp_fragmentation_interval = 10;
-static void schedule_get_resp_fragmentation_job(uint32_t *fragmentation_buffer, uint8_t size, uint8_t od_index, uint8_t server_id) {{
+static void schedule_get_resp_fragmentation_job(uint32_t *fragmentation_buffer, uint8_t size, uint8_t od_index, uint8_t client_id) {{
 {indent}job_t *fragmentation_job = job_pool_allocator_alloc();
 {indent}fragmentation_job->climax = canzero_get_time() + get_resp_fragmentation_interval;
 {indent}fragmentation_job->tag = GET_RESP_FRAGMENTATION_JOB_TAG;
@@ -234,7 +234,7 @@ static void schedule_get_resp_fragmentation_job(uint32_t *fragmentation_buffer, 
 {indent}fragmentation_job->job.get_fragmentation_job.offset = 1;
 {indent}fragmentation_job->job.get_fragmentation_job.size = size;
 {indent}fragmentation_job->job.get_fragmentation_job.od_index = od_index;
-{indent}fragmentation_job->job.get_fragmentation_job.server_id = server_id;
+{indent}fragmentation_job->job.get_fragmentation_job.client_id = client_id;
 {indent}scheduler_schedule(fragmentation_job);
 }}
 static job_t heartbeat_job;
@@ -279,8 +279,8 @@ static void schedule_jobs(uint32_t time) {{
 {indent3}fragmentation_response.m_header.m_sof = 0;
 {indent3}fragmentation_response.m_header.m_toggle = fragmentation_job->offset % 2;
 {indent3}fragmentation_response.m_header.m_od_index = fragmentation_job->od_index;
-{indent3}fragmentation_response.m_header.m_client_id = 0x{node_id:X};
-{indent3}fragmentation_response.m_header.m_server_id = fragmentation_job->server_id;
+{indent3}fragmentation_response.m_header.m_client_id = fragmentation_job->client_id;
+{indent3}fragmentation_response.m_header.m_server_id = 0x{node_id:X};
 {indent3}fragmentation_response.m_data = fragmentation_job->buffer[fragmentation_job->offset];
 {indent3}fragmentation_job->offset += 1;
 {indent3}if (fragmentation_job->offset == fragmentation_job->size) {{
