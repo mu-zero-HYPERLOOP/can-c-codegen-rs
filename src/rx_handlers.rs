@@ -76,7 +76,7 @@ pub fn generate_rx_handlers(
                 let command_name = command.name();
                 (
                     format!(
-                        "{indent}{namespace}_message_{resp_msg_name} resp;
+                        "{indent}{namespace}_message_{resp_msg_name} resp{{}};
 {indent}resp.erno = {namespace}_{command_name}({attribute_list});
 {indent}{frame_type_name} resp_frame;
 {indent}{namespace}_serialize_{namespace}_message_{resp_msg_name}(&resp, &resp_frame);
@@ -496,7 +496,7 @@ pub fn generate_rx_handlers(
                     "{indent}if (msg.m_header.m_server_id != {node_id}) {{
 {indent2}return;
 {indent}}}
-{indent}{namespace}_message_get_resp resp;
+{indent}{namespace}_message_get_resp resp{{}};
 {case_logic}{indent}resp.m_header.m_od_index = msg.m_header.m_od_index;
 {indent}resp.m_header.m_client_id = msg.m_header.m_client_id;
 {indent}resp.m_header.m_server_id = msg.m_header.m_server_id;
@@ -773,7 +773,7 @@ pub fn generate_rx_handlers(
                     "{indent}if (msg.m_header.m_server_id != {node_id}) {{
 {indent2}return;
 {indent}}}
-{indent}{namespace}_message_set_resp resp;
+{indent}{namespace}_message_set_resp resp{{}};
 {case_logic}
 {indent}resp.m_header.m_od_index = msg.m_header.m_od_index;
 {indent}resp.m_header.m_client_id = msg.m_header.m_client_id;
