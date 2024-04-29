@@ -483,7 +483,7 @@ pub fn generate_rx_handlers(
 {indent2}resp.m_header.m_sof = 1;
 {indent2}resp.m_header.m_eof = 0;
 {indent2}resp.m_header.m_toggle = 0;
-{indent2}schedule_get_resp_fragmentation_job({buffer_name}, {buffer_size}, {od_index}, msg.m_header.m_server_id);
+{indent2}schedule_get_resp_fragmentation_job({buffer_name}, {buffer_size}, {od_index}, msg.m_header.m_client_id);
 {indent2}break;
 {indent}}}\n"
                         );
