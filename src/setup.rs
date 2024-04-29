@@ -1,3 +1,5 @@
+use std::hash::{DefaultHasher, Hash, Hasher};
+
 use can_config_rs::config;
 
 use crate::options::Options;
@@ -31,8 +33,13 @@ pub fn generate_setup(node_config : &config::NodeRef, network_config : &config::
         let stream_name = tx_stream.name();
         schedule_stream_jobs_logic.push_str(&format!("{indent}schedule_{stream_name}_interval_job();\n"));
     }
+    
+    let mut hasher = DefaultHasher::new();
+    network_config.hash(&mut hasher);
+    let config_hash = hasher.finish();
 
     let init_def = format!("void {init_name}() {{
+__oe_config_hash = {config_hash};
 {setup_cans}
 {indent}job_pool_allocator_init();
 {indent}scheduler.size = 0;
