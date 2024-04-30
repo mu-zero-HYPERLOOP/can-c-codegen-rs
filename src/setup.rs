@@ -84,7 +84,8 @@ pub fn generate_setup(node_config : &config::NodeRef, network_config : &config::
 #define BUILD_TIME_IS_BAD (__TIME__[0] == '?')
 #define BUILD_HOUR  ((BUILD_TIME_IS_BAD) ? 99 :  COMPUTE_BUILD_HOUR)
 #define BUILD_MIN   ((BUILD_TIME_IS_BAD) ? 99 :  COMPUTE_BUILD_MIN)
-#define BUILD_SEC   ((BUILD_TIME_IS_BAD) ? 99 :  COMPUTE_BUILD_SEC)");
+#define BUILD_SEC   ((BUILD_TIME_IS_BAD) ? 99 :  COMPUTE_BUILD_SEC)
+");
     
     let mut hasher = DefaultHasher::new();
     network_config.hash(&mut hasher);
