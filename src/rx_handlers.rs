@@ -748,8 +748,8 @@ pub fn generate_rx_handlers(
                         case_logic.push_str(&format!(
                             "{indent}case {od_index} : {{
 {indent2}if (msg.m_header.m_sof == 1) {{
-{indent3}if (msg.m_header.m_toggle == 0 || msg.m_header.m_eof != 0) {{
-{indent4}return;
+{indent3}if (msg.m_header.m_toggle != 0 || msg.m_header.m_eof != 0) {{
+{indent4}return; //TODO proper error response frame!
 {indent3}}}
 {indent3}{buffer_offset} = 0;
 {indent2}}}else {{
