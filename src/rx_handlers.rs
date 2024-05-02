@@ -361,12 +361,12 @@ pub fn generate_rx_handlers(
                                             logic.push_str(&format!("{indent3}{buffer}[{upper_word_offset}] = ((uint32_t*)&masked)[1] >> {upper_shift_right});\n"));
                                         }
                                         logic.push_str(&format!("{indent2}}}"));
-                                        *bit_offset += size;
                                     } else {
                                         panic!(
                                             "primitive data types larger than 64 are not supported"
                                         );
                                     }
+                                    *bit_offset += size;
                                 }
                                 Type::Enum {
                                     name: _,
