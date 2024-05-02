@@ -1,4 +1,4 @@
-use can_config_rs::config::{self, message, Type, TypeRef};
+use can_config_rs::config::{self, message, Type};
 
 use crate::{errors::Result, options::Options, types::to_c_type_name};
 
@@ -313,19 +313,25 @@ pub fn generate_rx_handlers(
                                             logic.push_str(&format!(
                                                 "{indent2}{buffer}[{word_offset}] = {val};\n"
                                             ));
-                                        } else if (*bit_offset % 32) + size >= 32 {
+                                        } else if (*bit_offset % 32) + size <= 32 {
                                             let word_offset = *bit_offset / 32;
-                                            let shift = (*bit_offset + size) % 32;
+                                            let shift = *bit_offset % 32;
                                             logic.push_str(&format!(
                                                 "{indent2}{buffer}[{word_offset}] |= ({val} << {shift});\n"
                                             ));
                                         } else {
+                                            logic.push_str(&format!("{indent2}{{\n"));
+                                            logic.push_str(&format!("uint32_t val = {val};\n"));
+
                                             let lower_word_offset = *bit_offset / 32;
                                             let lower_shift = *bit_offset % 32;
-                                            logic.push_str(&format!("{indent2}{buffer}[{lower_word_offset}] |= ({val} << {lower_shift});\n"));
+                                            logic.push_str(&format!("{indent3}{buffer}[{lower_word_offset}] |= (val << {lower_shift});\n"));
+
                                             let upper_word_offset = lower_word_offset + 1;
-                                            let upper_shift = 32 - (*bit_offset + size) % 32;
-                                            logic.push_str(&format!("{indent2}{buffer}[{upper_word_offset}] = ({val} >> {upper_shift});\n"));
+                                            let upper_shift = 32 - lower_shift;
+                                            logic.push_str(&format!("{indent3}{buffer}[{upper_word_offset}] = (val >> {upper_shift});\n"));
+
+                                            logic.push_str(&format!("{indent2}}}\n"));
                                         }
                                     } else if size <= 64 {
                                         logic.push_str(&format!("{indent2}{{\n"));
@@ -337,7 +343,7 @@ pub fn generate_rx_handlers(
                                             let upper_word_offset = lower_word_offset + 1;
                                             logic.push_str(&format!("{indent3}{buffer}[{lower_word_offset}] = ((uint32_t*)&masked)[0];\n"));
                                             logic.push_str(&format!("{indent3}{buffer}[{upper_word_offset}] = ((uint32_t*)&masked)[1];\n"));
-                                        } else if (*bit_offset % 32) + size >= 64 {
+                                        } else if (*bit_offset % 32) + size <= 64 {
                                             let lower_word_offset = *bit_offset / 32;
                                             let lower_shift_left = *bit_offset % 32;
                                             logic.push_str(&format!("{indent3}{buffer}[{lower_word_offset}] |= ((uint32_t*)&masked)[0] << {lower_shift_left});\n"));
@@ -534,7 +540,7 @@ pub fn generate_rx_handlers(
                                     let size = signal_type.size() as usize;
 
                                     let masked_val =
-                                        format!("(msg.m_data & (0xFFFFFFFF >> (32 - {size})))");
+                                        format!("((msg.m_data >> {attrib_offset}) & (0xFFFFFFFF >> (32 - {size})))");
 
                                     let parsed_val = match signal_type {
                                         config::SignalType::UnsignedInt { size } => {
@@ -609,7 +615,7 @@ pub fn generate_rx_handlers(
                                     let size = *size as usize;
 
                                     let masked_val =
-                                        format!("(msg.m_data & (0xFFFFFFFF >> (32 - {size})))");
+                                        format!("((msg.m_data >> {attrib_offset}) & (0xFFFFFFFF >> (32 - {size})))");
 
                                     let parsed_val = format!("({name})({masked_val})");
                                     parse_logic.push_str(&format!("{var} = {parsed_val};\n"));
@@ -658,16 +664,16 @@ pub fn generate_rx_handlers(
                                     let val_bits = if bit_word_offset == 0 && size <= 32 {
                                         format!("({buffer_name}[{word_offset}] & (0xFFFFFFFF >> (32 - {size})))")
                                     } else if bit_word_offset == 0 && size > 32 {
-                                        assert!(size <= 64);
+                                        assert!(size == 64);
                                         let upper_word_offset = word_offset + 1;
                                         let upper_word_bit_offset = (bit_word_offset + size) - 32;
                                         format!("(uint64_t){buffer_name}[{word_offset}] | (((uint64_t)({buffer_name}[{upper_word_offset}] & (0xFFFFFFFF >> (32 - {upper_word_bit_offset})))) << 32)")
                                     } else if bit_word_offset + size <= 32 {
-                                        format!("({buffer_name}[{word_offset}] << {bit_word_offset}) & (0xFFFFFFFF >> (32 - {size}))")
-                                    } else if bit_word_offset + size < 32 {
+                                        format!("({buffer_name}[{word_offset}] >> {bit_word_offset}) & (0xFFFFFFFF >> (32 - {size}))")
+                                    } else if bit_word_offset + size > 32 {
                                         let upper_word_offset = word_offset + 1;
                                         let upper_word_bit_offset = (bit_word_offset + size) - 32;
-                                        format!("(uint64_t)({buffer_name}[{word_offset}] << {bit_word_offset}) | ((uint64_t)({buffer_name}[{upper_word_offset}] & (0xFFFFFFFF >> (32 - {upper_word_bit_offset}))) << 32")
+                                        format!("(uint64_t)({buffer_name}[{word_offset}] >> {bit_word_offset}) | ((uint64_t)({buffer_name}[{upper_word_offset}] & (0xFFFFFFFF >> (32 - {upper_word_bit_offset}))) << {bit_offset})")
                                     } else {
                                         panic!();
                                     };
@@ -685,6 +691,7 @@ pub fn generate_rx_handlers(
                                         } => format!("({val_bits}) * {scale} + {offset}"),
                                     };
                                     write_logic.push_str(&format!("{indent}{var} = {val};\n"));
+                                    *bit_offset += signal_type.size() as usize;
                                 }
                                 Type::Struct {
                                     name: _,
@@ -731,6 +738,7 @@ pub fn generate_rx_handlers(
                                     };
                                     let val = format!("(({name}){val_bits})");
                                     write_logic.push_str(&format!("{indent}{var} = {val};\n"));
+                                    *bit_offset += size;
                                 }
                                 Type::Array { len: _, ty: _ } => todo!(),
                             }
