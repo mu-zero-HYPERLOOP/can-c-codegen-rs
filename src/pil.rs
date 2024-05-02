@@ -46,5 +46,20 @@ pub fn generate_pil(
     );
     header.push_str(&can_filter_def);
 
+    source.push_str(
+"uint32_t min_u32(uint32_t v, uint32_t max) {
+    if (v > max) {
+        return max;
+    }
+    return v;
+}
+uint64_t min_u64(uint64_t v, uint64_t max) {
+    if (v > max) {
+        return max;
+    }
+    return v;
+}
+");
+
     Ok(())
 }

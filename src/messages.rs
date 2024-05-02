@@ -18,7 +18,7 @@ pub fn generate_messages(
     }
 
     let mut all_messages = tx_messages.clone();
-    for rx_message in rx_messages{
+    for rx_message in rx_messages {
         if all_messages.iter().any(|m| m.name() == rx_message.name()) {
             continue;
         }
@@ -55,7 +55,9 @@ pub fn generate_messages(
 
         type_def.push_str(&format!("}} {message_type_name};\n"));
         header.push_str(&type_def);
-        header.push_str(&format!("static const uint32_t {message_type_name}_id = {id};\n"));
+        header.push_str(&format!(
+            "static const uint32_t {message_type_name}_id = {id};\n"
+        ));
     }
     // serialize message
     for message in &all_messages {
@@ -118,41 +120,29 @@ pub fn generate_messages(
                                             scale,
                                         } => {
                                             if *size <= 32 {
-                                                serialized_def.push_str(&format!("{indent}float {attrib_name}_{attrib_offset} = ({attribute_prefix}{attrib_name} - {offset}) / {scale};\n"));
-                                                let ulimit = (0xFFFFFFFF as u32)
-                                                    .overflowing_shl(32 - *size as u32).0;
-                                                let mut limit = ulimit as f32;
-                                                for offset in 0..u32::MAX {
-                                                    let flimit : f32 = (ulimit - offset) as f32;
-                                                    if flimit <= ulimit as f32 {
-                                                        limit = flimit;
-                                                        break;
-                                                    }
-                                                }
+                                                serialized_def.push_str(&format!("{indent}uint32_t {attrib_name}_{attrib_offset} = ({attribute_prefix}{attrib_name} - {offset}) / {scale};\n"));
+                                                let u32_max = (0xFFFFFFFF as u32)
+                                                    .overflowing_shr(32 - *size as u32)
+                                                    .0;
+
                                                 serialized_def.push_str(&format!(
-"{indent}if ({attrib_name}_{attrib_offset} > {limit:.3}) {{
-{indent}{indent}{attrib_name}_{attrib_offset} = {limit:.3};
+"{indent}if ({attrib_name}_{attrib_offset} > 0x{u32_max:X}) {{
+{indent}{indent}{attrib_name}_{attrib_offset} = 0x{u32_max:X};
 {indent}}}
 "));
-                                                format!("(uint32_t) {attrib_name}_{attrib_offset}")
+                                                format!("{attrib_name}_{attrib_offset}")
                                             } else {
-                                                serialized_def.push_str(&format!("{indent}double {attrib_name}_{attrib_offset} = (({attribute_prefix}{attrib_name} - {offset}) / {scale});\n"));
-                                                let ulimit = (0xFFFFFFFFFFFFFFFF as u64)
-                                                    .overflowing_shl(64 - *size as u32).0;
-                                                let mut limit = ulimit as f64;
-                                                for offset in 0..u64::MAX {
-                                                    let flimit : f64 = (ulimit - offset) as f64;
-                                                    if flimit < ulimit as f64 {
-                                                        limit = flimit;
-                                                        break;
-                                                    }
-                                                }
+                                                serialized_def.push_str(&format!("{indent}uint64_t {attrib_name}_{attrib_offset} = (({attribute_prefix}{attrib_name} - {offset}) / {scale});\n"));
+                                                let u64_max = (0xFFFFFFFFFFFFFFFF as u64)
+                                                    .overflowing_shr(64 - *size as u32)
+                                                    .0;
+
                                                 serialized_def.push_str(&format!(
-"{indent}if ({attrib_name}_{attrib_offset} > {limit:.3}) {{
-{indent}{indent}{attrib_name}_{attrib_offset} = {limit:.3};
+"{indent}if ({attrib_name}_{attrib_offset} > 0x{u64_max:X}ull) {{
+{indent}{indent}{attrib_name}_{attrib_offset} = 0x{u64_max:X}ull;
 {indent}}}
 "));
-                                                format!("(uint64_t) {attrib_name}_{attrib_offset}")
+                                                format!("{attrib_name}_{attrib_offset}")
                                             }
                                         }
                                     };

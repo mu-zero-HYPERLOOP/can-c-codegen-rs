@@ -154,10 +154,11 @@ pub fn generate_rx_handlers(
                                             offset,
                                             scale,
                                         } => {
+                                            let max_u32_value = 0xFFFFFFFFu32.overflowing_shr(32u32 - *size as u32).0;
                                             let parse_dec = if *size <= 32 {
                                                 format!(
-                                                    "{indent2}resp.m_data |= ((uint32_t)(({oe_name} \
-                                                    - ({offset})) / {scale})) << {bit_offset};\n"
+                                                    "{indent2}resp.m_data |= min_u32(({oe_name} \
+                                                    - ({offset})) / {scale}, 0x{max_u32_value:X}) << {bit_offset};\n"
                                                 )
                                             } else if *size <= 64 {
                                                 panic!("values larger than 32 should be send in fragmented mode")
@@ -198,8 +199,8 @@ pub fn generate_rx_handlers(
                                     } else if *size <= 16 {
                                         format!(
                                             "{indent2}resp.m_data |= \
-                                                ((uint32_t)(((uint16_t){oe_name}) \
-                                                & (0xFFFF >> (16 - {size})))) << {bit_offset};\n"
+                                                ((uint32_t) clamp_u32(((uint16_t){oe_name}) \
+                                                & (0xFFFF >> (16 - {size})),0)) << {bit_offset};\n"
                                         )
                                     } else if *size <= 32 {
                                         format!("{indent2}resp.m_data |= \
@@ -277,14 +278,16 @@ pub fn generate_rx_handlers(
                                             offset,
                                             scale,
                                         } => {
+                                            let max_u32_value = 0xFFFFFFFFu32.overflowing_shr(32u32 - *size as u32).0;
+                                            let max_u64_value = 0xFFFFFFFFFFFFFFFFu64.overflowing_shr(64u32 - *size as u32).0;
                                             if *size <= 8 {
-                                                format!("((uint8_t)(({var} - ((float){offset})) / (float){scale}))")
+                                                format!("min_u32(({var} - ((float){offset})) / (float){scale}, 0x{max_u32_value:X}ul)")
                                             } else if *size <= 16 {
-                                                format!("((uint16_t)(({var} - ((float){offset})) / (float){scale}))")
+                                                format!("min_u32(({var} - ((float){offset})) / (float){scale}, 0x{max_u32_value:X}ul)")
                                             } else if *size <= 32 {
-                                                format!("((uint32_t)(({var} - ((float){offset})) / (float){scale}))")
+                                                format!("min_u32(({var} - ((float){offset})) / (float){scale}, 0x{max_u32_value:X}ul)")
                                             } else if *size <= 64 {
-                                                format!("((uint64_t)(({var} - ((double){offset})) / (double){scale}))")
+                                                format!("min_u64(({var} - ((double){offset})) / (double){scale}, 0x{max_u64_value:X}ull)")
                                             } else {
                                                 panic!("singed integer larger than 64 are not supported");
                                             }
