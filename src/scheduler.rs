@@ -1,4 +1,4 @@
-use can_config_rs::config;
+use canzero_config::config;
 
 use crate::options::Options;
 use crate::errors::Result;
@@ -6,7 +6,7 @@ use crate::errors::Result;
 
 
 
-pub fn generate_scheduler(network_config : &config::NetworkRef, node_config : &config::NodeRef,  source : &mut String, header :&mut String, options: &Options) -> Result<()>{
+pub fn generate_scheduler(network_config : &config::NetworkRef, node_config : &config::NodeRef,  source : &mut String, _header :&mut String, options: &Options) -> Result<()>{
     let namespace = options.namespace();
     let mut indent = String::new();
     for _ in 0..options.indent() {
@@ -17,7 +17,6 @@ pub fn generate_scheduler(network_config : &config::NetworkRef, node_config : &c
     let indent4 = format!("{indent2}{indent2}");
 
     let node_id = node_config.id();
-    let get_resp_bus_id = network_config.get_resp_message().bus().id();
     let mut command_resp_send_on_bus_cases = String::new();
     for bus in network_config.buses() {
         let bus_name = bus.name();
@@ -27,8 +26,6 @@ pub fn generate_scheduler(network_config : &config::NetworkRef, node_config : &c
 {indent4}break;
 "));
     }
-    
-    let heartbeat_bus_id = network_config.heartbeat_message().bus().id();
 
     let mut stream_case_logic = String::new();
     let mut schedule_stream_job_def = String::new();

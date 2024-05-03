@@ -1,4 +1,4 @@
-use can_config_rs::config;
+use canzero_config::config;
 use can_module_hooks::generate_hooks;
 use command_hooks::generate_command_hooks;
 use errors::{Error, Result};
@@ -31,7 +31,6 @@ mod setup;
 mod types;
 mod update;
 mod header_guard;
-mod extern_c_guard;
 mod scheduler;
 mod setters;
 

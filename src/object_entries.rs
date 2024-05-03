@@ -1,4 +1,4 @@
-use can_config_rs::config::ObjectEntryRef;
+use canzero_config::config::ObjectEntryRef;
 
 use crate::errors::Result;
 use crate::{options::Options, types::to_c_type_name};

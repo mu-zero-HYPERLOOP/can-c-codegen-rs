@@ -1,6 +1,6 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
 
-use can_config_rs::config;
+use canzero_config::config;
 
 use crate::options::Options;
 

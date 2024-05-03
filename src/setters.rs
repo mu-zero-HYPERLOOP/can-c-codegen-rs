@@ -1,5 +1,5 @@
-use can_config_rs::config::stream::StreamRef;
-use can_config_rs::config::{NodeRef, Type};
+use canzero_config::config::stream::StreamRef;
+use canzero_config::config::{NodeRef, Type};
 
 use crate::errors::Result;
 use crate::options::Options;

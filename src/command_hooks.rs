@@ -2,11 +2,11 @@ use crate::{
     errors::Result,
     options::Options,
 };
-use can_config_rs::config::{self, Type};
+use canzero_config::config::{self, Type};
 
 pub fn generate_command_hooks(
     commands: &Vec<config::CommandRef>,
-    source: &mut String,
+    _source: &mut String,
     header: &mut String,
     options: &Options,
 ) -> Result<()> {

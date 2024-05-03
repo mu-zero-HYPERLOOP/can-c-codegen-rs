@@ -1,4 +1,4 @@
-use can_config_rs::config::{self, Type};
+use canzero_config::config::{self, Type};
 
 use crate::errors::Result;
 use crate::messages::signal_type_to_c_type;

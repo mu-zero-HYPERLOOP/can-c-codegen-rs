@@ -1,4 +1,4 @@
-use can_config_rs::config::{self, message, Type};
+use canzero_config::config::{self, message, Type};
 
 use crate::{errors::Result, options::Options, types::to_c_type_name};
 
@@ -90,8 +90,6 @@ pub fn generate_rx_handlers(
             message::MessageUsage::GetResp => panic!(),
             message::MessageUsage::GetReq => {
                 let mut logic = String::new();
-                let resp = network_config.get_resp_message();
-                let resp_bus_id = resp.bus().id();
                 let mut case_logic = format!("{indent}switch (msg.m_header.m_od_index) {{\n");
                 for object_entry in node_config.object_entries() {
                     let name = object_entry.name();

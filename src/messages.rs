@@ -1,4 +1,4 @@
-use can_config_rs::config::{self, MessageRef, SignalType, Type, TypeSignalEncoding};
+use canzero_config::config::{self, MessageRef, SignalType, Type, TypeSignalEncoding};
 
 use crate::errors::Result;
 use crate::options::Options;
@@ -8,7 +8,7 @@ pub fn generate_messages(
     tx_messages: &Vec<MessageRef>,
     rx_messages: &Vec<MessageRef>,
     header: &mut String,
-    source: &mut String,
+    _source: &mut String,
     options: &Options,
 ) -> Result<()> {
     let namespace = options.namespace();
@@ -103,7 +103,6 @@ pub fn generate_messages(
                         }
                         TypeSignalEncoding::Primitive(primitive) => {
                             let attrib_name = primitive.name();
-                            let signal = primitive.signal();
                             match attrib.ty() as &Type {
                                 config::Type::Primitive(signal_type) => {
                                     let var = match signal_type {

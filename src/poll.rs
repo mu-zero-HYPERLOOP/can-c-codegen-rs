@@ -1,5 +1,5 @@
-use can_config_rs::config;
-use can_config_rs::config::bus::BusRef;
+use canzero_config::config;
+use canzero_config::config::bus::BusRef;
 
 use crate::options::Options;
 
