@@ -1,6 +1,5 @@
-workspace = { members = ["testing/testing_cli"] }
 [package]
-name = "can-c-codegen-rs"
+name = "canzero-codegen"
 version = "0.1.0"
 edition = "2021"
 
