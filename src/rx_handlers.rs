@@ -340,24 +340,24 @@ pub fn generate_rx_handlers(
                                         } else if (*bit_offset % 32) + size <= 64 {
                                             let lower_word_offset = *bit_offset / 32;
                                             let lower_shift_left = *bit_offset % 32;
-                                            logic.push_str(&format!("{indent3}{buffer}[{lower_word_offset}] |= ((uint32_t*)&masked)[0] << {lower_shift_left});\n"));
+                                            logic.push_str(&format!("{indent3}{buffer}[{lower_word_offset}] |= ((uint32_t*)&masked)[0] << {lower_shift_left};\n"));
                                             let upper_word_offset = lower_word_offset + 1;
                                             let lower_shift_right = 32 - *bit_offset % 32;
-                                            logic.push_str(&format!("{indent3}{buffer}[{upper_word_offset}] = ((uint32_t*)&masked)[0] >> {lower_shift_right});\n"));
+                                            logic.push_str(&format!("{indent3}{buffer}[{upper_word_offset}] = ((uint32_t*)&masked)[0] >> {lower_shift_right};\n"));
                                             let upper_shift_left = lower_shift_left;
-                                            logic.push_str(&format!("{indent3}{buffer}[{upper_word_offset}] |= ((uint32_t*)&masked)[1] << {upper_shift_left});\n"));
+                                            logic.push_str(&format!("{indent3}{buffer}[{upper_word_offset}] |= ((uint32_t*)&masked)[1] << {upper_shift_left};\n"));
                                         } else {
                                             let lower_word_offset = *bit_offset / 32;
                                             let lower_shift_left = *bit_offset % 32;
-                                            logic.push_str(&format!("{indent3}{buffer}[{lower_word_offset}] |= ((uint32_t*)&masked)[0] << {lower_shift_left});\n"));
+                                            logic.push_str(&format!("{indent3}{buffer}[{lower_word_offset}] |= ((uint32_t*)&masked)[0] << {lower_shift_left};\n"));
                                             let middle_word_offset = lower_word_offset + 1;
                                             let lower_shift_right = 32 - *bit_offset % 32;
-                                            logic.push_str(&format!("{indent3}{buffer}[{middle_word_offset}] = ((uint32_t*)&masked)[0] >> {lower_shift_right});\n"));
+                                            logic.push_str(&format!("{indent3}{buffer}[{middle_word_offset}] = ((uint32_t*)&masked)[0] >> {lower_shift_right};\n"));
                                             let upper_shift_left = lower_shift_left;
-                                            logic.push_str(&format!("{indent3}{buffer}[{middle_word_offset}] |= ((uint32_t*)&masked)[1] << {upper_shift_left});\n"));
+                                            logic.push_str(&format!("{indent3}{buffer}[{middle_word_offset}] |= ((uint32_t*)&masked)[1] << {upper_shift_left};\n"));
                                             let upper_word_offset = middle_word_offset + 1;
                                             let upper_shift_right =lower_shift_right;
-                                            logic.push_str(&format!("{indent3}{buffer}[{upper_word_offset}] = ((uint32_t*)&masked)[1] >> {upper_shift_right});\n"));
+                                            logic.push_str(&format!("{indent3}{buffer}[{upper_word_offset}] = ((uint32_t*)&masked)[1] >> {upper_shift_right};\n"));
                                         }
                                         logic.push_str(&format!("{indent2}}}"));
                                     } else {
