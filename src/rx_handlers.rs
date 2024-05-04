@@ -557,14 +557,17 @@ pub fn generate_rx_handlers(
                                             }
                                         }
                                         config::SignalType::SignedInt { size } => {
+                                            // if (masked[*size-1] is set) {
+                                            // pad with ones
+                                            // }
                                             if *size <= 8 {
-                                                format!("(int8_t){masked_val}")
+                                                format!("({masked_val} & (0x1 << ({size} - 1))) != 0 ? (int8_t) ({masked_val} | (0xFFFFFFFF << ({size} - 1))) : (int8_t){masked_val}")
                                             } else if *size <= 16 {
-                                                format!("(int16_t){masked_val}")
+                                                format!("({masked_val} & (0x1 << ({size} - 1))) != 0 ? (int16_t) ({masked_val} | (0xFFFFFFFF << ({size} - 1))) : (int16_t){masked_val}")
                                             } else if *size <= 32 {
-                                                format!("(int32_t){masked_val}")
+                                                format!("({masked_val} & (0x1 << ({size} - 1))) != 0 ? (int32_t) ({masked_val} | (0xFFFFFFFF << ({size} - 1))) : (int32_t){masked_val}")
                                             } else if *size <= 64 {
-                                                format!("(int64_t){masked_val}")
+                                                panic!("unsigned integers larger than 32 bit are not supported in non fragmented set requests");
                                             } else {
                                                 panic!("unsigned integers larger than 64 bit are not supported");
                                             }
@@ -687,8 +690,14 @@ pub fn generate_rx_handlers(
                                         config::SignalType::UnsignedInt { size: _ } => {
                                             format!("{val_bits}")
                                         }
-                                        config::SignalType::SignedInt { size: _ } => {
-                                            format!("{val_bits}")
+                                        config::SignalType::SignedInt { size } => {
+                                            if *size <= 32 {
+                                                write_logic.push_str(&format!("{indent}uint32_t tmp_{bit_offset} = {val_bits};\n"));
+                                                format!("(tmp_{bit_offset} & (0x1 << ({size} - 1))) != 0 ? (int32_t) (tmp_{bit_offset} | (0xFFFFFFFF << ({size} - 1))) : (int32_t)tmp_{bit_offset}")
+                                            }else {
+                                                write_logic.push_str(&format!("{indent}uint64_t tmp_{bit_offset} = {val_bits};\n"));
+                                                format!("(tmp_{bit_offset} & (((uint64_t)0x1ull) << ({size} - 1))) != 0 ? (int64_t) (tmp_{bit_offset} | (((uint64_t)0xFFFFFFFFFFFFFFFFull) << ({size} - 1))) : (int64_t)tmp_{bit_offset}")
+                                            }
                                         }
                                         config::SignalType::Decimal {
                                             size: _,
