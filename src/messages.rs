@@ -8,7 +8,7 @@ pub fn generate_messages(
     tx_messages: &Vec<MessageRef>,
     rx_messages: &Vec<MessageRef>,
     header: &mut String,
-    _source: &mut String,
+    source: &mut String,
     options: &Options,
 ) -> Result<()> {
     let namespace = options.namespace();
@@ -60,7 +60,7 @@ pub fn generate_messages(
         ));
     }
     // serialize message
-    for message in &all_messages {
+    for message in tx_messages {
         let message_type_name = format!("{namespace}_message_{}", message.name());
         let id = match message.id() {
             config::MessageId::StandardId(id) => format!("0x{id:X}"),
@@ -350,10 +350,10 @@ pub fn generate_messages(
         };
 
         serialize_def.push_str("}\n");
-        header.push_str(&serialize_def);
+        source.push_str(&serialize_def);
     }
     // deserialize
-    for message in &all_messages {
+    for message in rx_messages {
         let message_type_name = format!("{namespace}_message_{}", message.name());
         // function to serialize the message struct into a can frame!
         let deserialize_func_name = format!("{namespace}_deserialize_{message_type_name}");
@@ -414,8 +414,14 @@ pub fn generate_messages(
                                         SignalType::UnsignedInt { size: _ } => {
                                             format!("({val_bits})")
                                         }
-                                        SignalType::SignedInt { size: _ } => {
-                                            format!("({val_bits})")
+                                        SignalType::SignedInt { size } => {
+                                            if *size <= 32 {
+                                                deserialized_def.push_str(&format!("{indent}uint32_t tmp_{attrib_bit_offset} = {val_bits};\n"));
+                                                format!("(tmp_{attrib_bit_offset} & (((uint32_t)0x1) << ({size} - 1)) != 0) ? (tmp_{attrib_bit_offset} | (((uint32_t)0xFFFFFFFFul) << ({size} - 1))) : tmp_{attrib_bit_offset}")
+                                            }else {
+                                                deserialized_def.push_str(&format!("{indent}uint64_t tmp_{attrib_bit_offset} = {val_bits};\n"));
+                                                format!("(tmp_{attrib_bit_offset} & (((uint64_t)0x1) << ({size} - 1)) != 0) ? (tmp_{attrib_bit_offset} | (((uint64_t)0xFFFFFFFFFFFFFFFFull) << ({size} - 1))) : tmp_{attrib_bit_offset}")
+                                            }
                                         }
                                         SignalType::Decimal {
                                             size: _,

@@ -188,29 +188,26 @@ pub fn generate_rx_handlers(
                                     entries: _,
                                     visibility: _,
                                 } => {
+
                                     let parse_enum = if *size <= 8 {
                                         format!(
-                                            "{indent2}resp.m_data |= \
-                                                ((uint32_t)(((uint8_t){oe_name}) \
-                                                & (0xFF >> (8 - {size})))) << {bit_offset};\n"
+                                            "{indent2}resp.m_data |= ((uint32_t)(((uint8_t){oe_name}) \
+                                            & (0xFF >> (8 - {size})))) << {bit_offset};\n"
                                         )
                                     } else if *size <= 16 {
                                         format!(
-                                            "{indent2}resp.m_data |= \
-                                                ((uint32_t) clamp_u32(((uint16_t){oe_name}) \
-                                                & (0xFFFF >> (16 - {size})),0)) << {bit_offset};\n"
-                                        )
+                                            "{indent2}resp.m_data |= ((uint32_t)((uint16_t){oe_name}) \
+                                            & (0xFFFF >> (16 - {size})))) << {bit_offset};\n")
                                     } else if *size <= 32 {
-                                        format!("{indent2}resp.m_data |= \
-                                                (((uint32_t){oe_name}) \
-                                                 & (0xFFFFFFFF >> (32 - {size}))) << {bit_offset};\n")
+                                        format!(
+                                            "{indent2}resp.m_data |= (((uint32_t){oe_name}) & \
+                                            (0xFFFFFFFF >> (32 - {size}))) << {bit_offset};\n")
                                     } else if *size <= 64 {
-                                        panic!(
-                                        "values larger than 32 should be send in fragmented mode"
-                                    )
+                                        panic!("enums larger than 32 should be send in fragmented mode")
                                     } else {
-                                        panic!("unsigned integer larger than 64 are not supported");
+                                        panic!("enums larger than 64 are not supported");
                                     };
+
                                     parse_code.push_str(&parse_enum);
                                     *bit_offset += size;
                                 }
@@ -375,16 +372,14 @@ pub fn generate_rx_handlers(
                                     visibility: _,
                                 } => {
                                     let size = *size as usize;
-                                    let val = if size <= 8 {
-                                        format!("({var} & (0xFF >> (8 - {size})))")
-                                    } else if size <= 16 {
-                                        format!("({var} & (0xFFFF >> (16 - {size})))")
-                                    } else if size <= 32 {
+                                    let val = if size <= 32 {
                                         format!("({var} & (0xFFFFFFFF >> (32 - {size})))")
                                     } else if size <= 64 {
                                         format!("({var} & (0xFFFFFFFFFFFFFFFF >> (64 - {size})))")
                                     } else {
-                                        panic!("enum data types larger than 64 are not supported")
+                                        panic!(
+                                            "primitive data types larger than 64 are not supported"
+                                        )
                                     };
                                     if size <= 32 {
                                         if *bit_offset % 32 == 0 {
@@ -425,32 +420,32 @@ pub fn generate_rx_handlers(
                                         } else if (*bit_offset % 32) + size <= 64 {
                                             let lower_word_offset = *bit_offset / 32;
                                             let lower_shift_left = *bit_offset % 32;
-                                            logic.push_str(&format!("{indent3}{buffer}[{lower_word_offset}] |= ((uint32_t*)&masked)[0] << {lower_shift_left});\n"));
+                                            logic.push_str(&format!("{indent3}{buffer}[{lower_word_offset}] |= ((uint32_t*)&masked)[0] << {lower_shift_left};\n"));
                                             let upper_word_offset = lower_word_offset + 1;
                                             let lower_shift_right = 32 - *bit_offset % 32;
-                                            logic.push_str(&format!("{indent3}{buffer}[{upper_word_offset}] = ((uint32_t*)&masked)[0] >> {lower_shift_right});\n"));
+                                            logic.push_str(&format!("{indent3}{buffer}[{upper_word_offset}] = ((uint32_t*)&masked)[0] >> {lower_shift_right};\n"));
                                             let upper_shift_left = lower_shift_left;
-                                            logic.push_str(&format!("{indent3}{buffer}[{upper_word_offset}] |= ((uint32_t*)&masked)[1] << {upper_shift_left});\n"));
+                                            logic.push_str(&format!("{indent3}{buffer}[{upper_word_offset}] |= ((uint32_t*)&masked)[1] << {upper_shift_left};\n"));
                                         } else {
                                             let lower_word_offset = *bit_offset / 32;
                                             let lower_shift_left = *bit_offset % 32;
-                                            logic.push_str(&format!("{indent3}{buffer}[{lower_word_offset}] |= ((uint32_t*)&masked)[0] << {lower_shift_left});\n"));
+                                            logic.push_str(&format!("{indent3}{buffer}[{lower_word_offset}] |= ((uint32_t*)&masked)[0] << {lower_shift_left};\n"));
                                             let middle_word_offset = lower_word_offset + 1;
                                             let lower_shift_right = 32 - *bit_offset % 32;
-                                            logic.push_str(&format!("{indent3}{buffer}[{middle_word_offset}] = ((uint32_t*)&masked)[0] >> {lower_shift_right});\n"));
+                                            logic.push_str(&format!("{indent3}{buffer}[{middle_word_offset}] = ((uint32_t*)&masked)[0] >> {lower_shift_right};\n"));
                                             let upper_shift_left = lower_shift_left;
-                                            logic.push_str(&format!("{indent3}{buffer}[{middle_word_offset}] |= ((uint32_t*)&masked)[1] << {upper_shift_left});\n"));
+                                            logic.push_str(&format!("{indent3}{buffer}[{middle_word_offset}] |= ((uint32_t*)&masked)[1] << {upper_shift_left};\n"));
                                             let upper_word_offset = middle_word_offset + 1;
                                             let upper_shift_right =lower_shift_right;
-                                            logic.push_str(&format!("{indent3}{buffer}[{upper_word_offset}] = ((uint32_t*)&masked)[1] >> {upper_shift_right});\n"));
+                                            logic.push_str(&format!("{indent3}{buffer}[{upper_word_offset}] = ((uint32_t*)&masked)[1] >> {upper_shift_right};\n"));
                                         }
-                                        logic.push_str(&format!("}}"));
-                                        *bit_offset += size;
+                                        logic.push_str(&format!("{indent2}}}"));
                                     } else {
                                         panic!(
                                             "primitive data types larger than 64 are not supported"
                                         );
                                     }
+                                    *bit_offset += size;
                                 }
                                 Type::Struct {
                                     name: _,
@@ -545,13 +540,13 @@ pub fn generate_rx_handlers(
                                     let parsed_val = match signal_type {
                                         config::SignalType::UnsignedInt { size } => {
                                             if *size <= 8 {
-                                                format!("(uint8_t){masked_val}")
+                                                format!("((uint8_t)({masked_val}))")
                                             } else if *size <= 16 {
-                                                format!("(uint16_t){masked_val}")
+                                                format!("((uint16_t)({masked_val}))")
                                             } else if *size <= 32 {
-                                                format!("(uint32_t){masked_val}")
+                                                format!("((uint32_t)({masked_val}))")
                                             } else if *size <= 64 {
-                                                format!("(uint64_t){masked_val}")
+                                                format!("((uint64_t)({masked_val}))")
                                             } else {
                                                 panic!("unsigned integers larger than 64 bit are not supported");
                                             }
@@ -620,7 +615,7 @@ pub fn generate_rx_handlers(
                                     let masked_val =
                                         format!("((msg.m_data >> {attrib_offset}) & (0xFFFFFFFF >> (32 - {size})))");
 
-                                    let parsed_val = format!("({name})({masked_val})");
+                                    let parsed_val = format!("(({name}){masked_val})");
                                     parse_logic.push_str(&format!("{var} = {parsed_val};\n"));
                                     *attrib_offset += size as usize;
                                 }
@@ -748,7 +743,7 @@ pub fn generate_rx_handlers(
                                         let upper_word_bit_offset = (bit_word_offset + size) - 32;
                                         let upper_word_shift = 32 - bit_word_offset;
                                         format!("(uint64_t)({buffer_name}[{word_offset}] >> {bit_word_offset}) | ((uint64_t)({buffer_name}[{upper_word_offset}] & (0xFFFFFFFF >> (32 - {upper_word_bit_offset}))) << {upper_word_shift})")
-                                    } else if bit_word_offset + size <= 64 { 
+                                    } else { 
                                         let middle_word = word_offset + 1;
                                         let upper_word = word_offset + 2;
                                         let middle_shift = 32 - bit_word_offset;
@@ -756,10 +751,8 @@ pub fn generate_rx_handlers(
                                         let upper_mask = u32::MAX.overflowing_shr(32 - upper_len as u32).0;
                                         let upper_shift = 64 - bit_word_offset;
                                         format!("((uint64_t)({buffer_name}[{word_offset}]) >> {bit_word_offset}) | ((uint64_t)({buffer_name}[{middle_word}]) << {middle_shift}) | ((uint64_t)({buffer_name}[{upper_word}] & 0x{upper_mask:X}) << {upper_shift})")
-                                    } else {
-                                        panic!();
                                     };
-                                    let val = format!("(({name}){val_bits})");
+                                    let val = format!("(({name})({val_bits}))");
                                     write_logic.push_str(&format!("{indent}{var} = {val};\n"));
                                     *bit_offset += size;
                                 }
