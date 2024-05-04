@@ -64,12 +64,13 @@ dependencies = [
 [[package]]
 name = "canzero-config"
 version = "0.1.0"
-source = "git+https://github.com/mu-zero-HYPERLOOP/canzero-config.git#201a610077faef459451d4206703b2669343d345"
+source = "git+https://github.com/mu-zero-HYPERLOOP/canzero-config.git#6d4db07da6bfae656f736466f1497f121e9a2a02"
 dependencies = [
  "bit_reverse",
  "can-dbc",
  "chrono",
  "regex",
+ "seahash",
 ]
 
 [[package]]
@@ -183,9 +184,9 @@ dependencies = [
 
 [[package]]
 name = "num-traits"
-version = "0.2.18"
+version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da0df0e5185db44f69b44f26786fe401b6c293d1907744beaa7fa62b2e5a517a"
+checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
 ]
@@ -242,6 +243,12 @@ name = "regex-syntax"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "adad44e29e4c806119491a7f06f03de4d1af22c3a680dd47f1e6e179439d1f56"
+
+[[package]]
+name = "seahash"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c107b6f4780854c8b126e228ea8869f4d7b71260f962fefb57b996b8959ba6b"
 
 [[package]]
 name = "syn"

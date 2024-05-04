@@ -1,5 +1,3 @@
-use std::hash::{DefaultHasher, Hash, Hasher};
-
 use canzero_config::config;
 
 use crate::options::Options;
@@ -87,9 +85,7 @@ pub fn generate_setup(node_config : &config::NodeRef, network_config : &config::
 #define BUILD_SEC   ((BUILD_TIME_IS_BAD) ? 99 :  COMPUTE_BUILD_SEC)
 ");
     
-    let mut hasher = DefaultHasher::new();
-    network_config.hash(&mut hasher);
-    let config_hash = hasher.finish();
+    let config_hash = network_config.portable_hash();
 
     let init_def = format!("void {init_name}() {{
 {indent}__oe_config_hash = {config_hash}ull;
