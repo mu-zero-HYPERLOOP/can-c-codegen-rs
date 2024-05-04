@@ -674,7 +674,7 @@ pub fn generate_rx_handlers(
                                         let upper_word_bit_offset = (bit_word_offset + size) - 32;
                                         let upper_word_shift = 32 - bit_word_offset;
                                         format!("(uint64_t)({buffer_name}[{word_offset}] >> {bit_word_offset}) | ((uint64_t)({buffer_name}[{upper_word_offset}] & (0xFFFFFFFF >> (32 - {upper_word_bit_offset}))) << {upper_word_shift})")
-                                    } else if bit_word_offset + size <= 64 { 
+                                    } else { 
                                         let middle_word = word_offset + 1;
                                         let upper_word = word_offset + 2;
                                         let middle_shift = 32 - bit_word_offset;
@@ -682,8 +682,6 @@ pub fn generate_rx_handlers(
                                         let upper_mask = u32::MAX.overflowing_shr(32 - upper_len as u32).0;
                                         let upper_shift = 64 - bit_word_offset;
                                         format!("((uint64_t)({buffer_name}[{word_offset}]) >> {bit_word_offset}) | ((uint64_t)({buffer_name}[{middle_word}]) << {middle_shift}) | ((uint64_t)({buffer_name}[{upper_word}] & 0x{upper_mask:X}) << {upper_shift})")
-                                    } else {
-                                        panic!();
                                     };
                                     let val = match signal_type {
                                         config::SignalType::UnsignedInt { size: _ } => {
