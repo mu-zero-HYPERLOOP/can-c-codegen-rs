@@ -7,3 +7,6 @@ edition = "2021"
 
 [dependencies]
 canzero-config = { git = "https://github.com/mu-zero-HYPERLOOP/canzero-config.git" }
+
+[dev-dependencies]
+canzero-yaml = { git = "https://github.com/mu-zero-HYPERLOOP/canzero-yaml.git" }

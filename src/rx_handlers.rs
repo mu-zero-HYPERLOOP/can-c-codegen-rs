@@ -814,7 +814,12 @@ pub fn generate_rx_handlers(
 
                 (logic, false)
             }
-            message::MessageUsage::Heartbeat => ("".to_owned(), false),
+            message::MessageUsage::Heartbeat => {
+                let mut logic = String::new();
+                logic.push_str(&format!(
+                        "{indent}heartbeat_wdg_job.static_tick_counters[msg.m_node_id] = 0;\n"));
+                (logic, false)
+            },
             message::MessageUsage::External { interval: _ } => ("".to_owned(), true),
         };
 

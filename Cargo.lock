@@ -59,6 +59,7 @@ name = "canzero-codegen"
 version = "0.1.0"
 dependencies = [
  "canzero-config",
+ "canzero-yaml",
 ]
 
 [[package]]
@@ -71,6 +72,16 @@ dependencies = [
  "chrono",
  "regex",
  "seahash",
+]
+
+[[package]]
+name = "canzero-yaml"
+version = "0.1.0"
+source = "git+https://github.com/mu-zero-HYPERLOOP/canzero-yaml.git#7f0c6f546b3849bcfbf12a78558ff67db4674d58"
+dependencies = [
+ "canzero-config",
+ "regex",
+ "yaml-rust",
 ]
 
 [[package]]
@@ -153,6 +164,12 @@ name = "libc"
 version = "0.2.154"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ae743338b92ff9146ce83992f766a31066a91a8c84a45e0e9f21e7cf6de6d346"
+
+[[package]]
+name = "linked-hash-map"
+version = "0.5.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
 
 [[package]]
 name = "log"
@@ -404,3 +421,12 @@ name = "windows_x86_64_msvc"
 version = "0.52.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bec47e5bfd1bff0eeaf6d8b485cc1074891a197ab4225d504cb7a1ab88b02bf0"
+
+[[package]]
+name = "yaml-rust"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56c1936c4cc7a1c9ab21a1ebb602eb942ba868cbd44a99cb7cdc5892335e1c85"
+dependencies = [
+ "linked-hash-map",
+]

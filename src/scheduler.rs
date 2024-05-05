@@ -15,6 +15,7 @@ pub fn generate_scheduler(network_config : &config::NetworkRef, node_config : &c
     let indent2 = format!("{indent}{indent}");
     let indent3 = format!("{indent2}{indent}");
     let indent4 = format!("{indent2}{indent2}");
+    let indent5 = format!("{indent3}{indent2}");
 
     let node_id = node_config.id();
     let mut command_resp_send_on_bus_cases = String::new();
@@ -94,11 +95,15 @@ static void schedule_{stream_name}_interval_job(){{
     let get_resp_bus_name = network_config.get_resp_message().bus().name();
     source.push_str(&format!(
 "
+__attribute__((weak)) void {namespace}_wdg_timeout(uint8_t node_id) {{}}
+
 typedef enum {{
   HEARTBEAT_JOB_TAG = 0,
-  GET_RESP_FRAGMENTATION_JOB_TAG = 1,
-  STREAM_INTERVAL_JOB_TAG = 2,
+  HEARTBEAT_WDG_JOB_TAG = 1,
+  GET_RESP_FRAGMENTATION_JOB_TAG = 2,
+  STREAM_INTERVAL_JOB_TAG = 3,
 }} job_tag;
+
 typedef struct {{
   uint32_t *buffer;
   uint8_t offset;
@@ -106,31 +111,38 @@ typedef struct {{
   uint8_t od_index;
   uint8_t client_id;
 }} get_resp_fragmentation_job;
-typedef struct {{
-  uint32_t command_resp_msg_id;
-  uint8_t bus_id;
-}} command_resp_timeout_job;
+
 typedef struct {{
   uint32_t last_schedule; 
   uint32_t stream_id;
 }} stream_interval_job;
+
 typedef struct {{
-  uint32_t climax;
-  uint32_t position;
-  job_tag tag;
-  union {{
-    get_resp_fragmentation_job get_fragmentation_job;
-    stream_interval_job stream_job;
+{indent}unsigned int static_tick_counters[node_id_count];
+{indent}unsigned int dynmic_tick_counters[1];
+}} heartbeat_wdg_job;
+
+typedef struct {{
+{indent}uint32_t climax;
+{indent}uint32_t position;
+{indent}job_tag tag;
+{indent}union {{
+{indent2}get_resp_fragmentation_job get_fragmentation_job;
+{indent2}stream_interval_job stream_job;
+{indent2}heartbeat_wdg_job wdg_job;
   }} job;
 }} job_t;
+
 union job_pool_allocator_entry {{
 {indent}job_t job;
 {indent}union job_pool_allocator_entry *next;
 }};
+
 typedef struct {{
 {indent}union job_pool_allocator_entry job[64];
 {indent}union job_pool_allocator_entry *freelist;
 }} job_pool_allocator;
+
 static job_pool_allocator job_allocator;
 static void job_pool_allocator_init() {{
 {indent}for (uint8_t i = 1; i < 64; i++) {{
@@ -139,6 +151,7 @@ static void job_pool_allocator_init() {{
 {indent}job_allocator.job[64 - 1].next = NULL;
 {indent}job_allocator.freelist = job_allocator.job;
 }}
+
 static job_t *job_pool_allocator_alloc() {{
 {indent}if (job_allocator.freelist != NULL) {{
 {indent2}job_t *job = &job_allocator.freelist->job;
@@ -234,13 +247,26 @@ static void schedule_get_resp_fragmentation_job(uint32_t *fragmentation_buffer, 
 {indent}fragmentation_job->job.get_fragmentation_job.client_id = client_id;
 {indent}scheduler_schedule(fragmentation_job);
 }}
+
 static job_t heartbeat_job;
 static const uint32_t heartbeat_interval = 100;
 static void schedule_heartbeat_job() {{
-{indent}heartbeat_job.climax = canzero_get_time() + heartbeat_interval;
+{indent}heartbeat_job.climax = canzero_get_time();
 {indent}heartbeat_job.tag = HEARTBEAT_JOB_TAG;
 {indent}scheduler_schedule(&heartbeat_job);
 }}
+
+static job_t heartbeat_wdg_job;
+static const uint32_t heartbeat_wdg_tick_duration = 50;
+static void schedule_heartbeat_wdg_job() {{
+{indent}heartbeat_wdg_job.climax = canzero_get_time() + 100;
+{indent}heartbeat_wdg_job.tag = HEARTBEAT_WDG_JOB_TAG;
+{indent}for (unsigned int i = 0; i < node_id_count; ++i) {{
+{indent2}heart_wdg_job.job.wdg_job.static_tick_counters[i] = 0;
+{indent}}}
+{indent}scheduler_schedule(&heartbeat_wdg_job);
+}}
+
 {schedule_stream_job_def}
 static void schedule_jobs(uint32_t time) {{
 {indent}for (uint8_t i = 0; i < 100; ++i) {{
@@ -268,6 +294,19 @@ static void schedule_jobs(uint32_t time) {{
 {indent3}{namespace}_frame heartbeat_frame;
 {indent3}{namespace}_serialize_{namespace}_message_heartbeat(&heartbeat, &heartbeat_frame);
 {indent3}{namespace}_{heartbeat_bus_name}_send(&heartbeat_frame);
+{indent3}break;
+{indent2}}}
+{indent2}case HEARTBEAT_WDG_JOB_TAG: {{
+{indent3}scheduler_reschedule(time + heartbeat_wdg_tick_duration);
+{indent3}{namespace}_exit_critical();
+{indent3}for (unsigned int i = 0; i < node_id_count; ++i) {{
+{indent4}heartbeat_wdg_job.job.wdg_job.static_tick_counter[i] += 1;
+{indent3}}}
+{indent3}for (unsigned int i = 0; i < node_id_count; ++i) {{
+{indent4}if (heartbeat_wdg_job.job.wdg_job.static_tick_counter[i] >= 4) {{
+{indent5}{namespace}_wdg_timeout(i);
+{indent4}}}
+{indent3}}}
 {indent3}break;
 {indent2}}}
 {indent2}case GET_RESP_FRAGMENTATION_JOB_TAG: {{
