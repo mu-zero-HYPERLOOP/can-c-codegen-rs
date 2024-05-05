@@ -118,6 +118,7 @@ typedef struct {{
 }} stream_interval_job;
 
 typedef struct {{
+{indent}unsigned int heatbeat_wdg_armed[node_id_count];
 {indent}unsigned int static_tick_counters[node_id_count];
 {indent}unsigned int dynmic_tick_counters[1];
 }} heartbeat_wdg_job;
@@ -263,6 +264,7 @@ static void schedule_heartbeat_wdg_job() {{
 {indent}heartbeat_wdg_job.tag = HEARTBEAT_WDG_JOB_TAG;
 {indent}for (unsigned int i = 0; i < node_id_count; ++i) {{
 {indent2}heart_wdg_job.job.wdg_job.static_tick_counters[i] = 0;
+{indent2}heart_wdg_job.job.wdg_job.heartbeat_wdg_armed[i] = 0;
 {indent}}}
 {indent}scheduler_schedule(&heartbeat_wdg_job);
 }}
@@ -300,7 +302,8 @@ static void schedule_jobs(uint32_t time) {{
 {indent3}scheduler_reschedule(time + heartbeat_wdg_tick_duration);
 {indent3}{namespace}_exit_critical();
 {indent3}for (unsigned int i = 0; i < node_id_count; ++i) {{
-{indent4}heartbeat_wdg_job.job.wdg_job.static_tick_counter[i] += 1;
+{indent4}heartbeat_wdg_job.job.wdg_job.static_tick_counter[i] 
+{indent5}+= heartbeat_wdg_job.job.wdg_job.heartbeat_wdg_armed[i];
 {indent3}}}
 {indent3}for (unsigned int i = 0; i < node_id_count; ++i) {{
 {indent4}if (heartbeat_wdg_job.job.wdg_job.static_tick_counter[i] >= 4) {{

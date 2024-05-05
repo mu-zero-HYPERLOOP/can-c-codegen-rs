@@ -817,6 +817,8 @@ pub fn generate_rx_handlers(
             message::MessageUsage::Heartbeat => {
                 let mut logic = String::new();
                 logic.push_str(&format!(
+                        "{indent}heartbeat_wdg_job.heartbeat_wdg_armed[msg.m_node_id] = 1;\n"));
+                logic.push_str(&format!(
                         "{indent}heartbeat_wdg_job.static_tick_counters[msg.m_node_id] = 0;\n"));
                 (logic, false)
             },
