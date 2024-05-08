@@ -47,7 +47,7 @@ pub fn generate_rx_handlers(
                     let msg_attribute = encoding.name();
 
                     logic += &format!(
-                        "{indent}{namespace}_set_{object_entry_name}(msg.{msg_attribute});\n"
+                        "{indent}{namespace}_set_{object_entry_name}(msg.m_{msg_attribute});\n"
                     );
                     // logic += &format!("{indent}{object_entry_var} = msg.{msg_attribute};\n");
                 }
