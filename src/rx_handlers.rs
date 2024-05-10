@@ -85,7 +85,7 @@ pub fn generate_rx_handlers(
                     ),
                     false,
                 )
-            }
+            },
             message::MessageUsage::CommandResp(_) => ("".to_owned(), false),
             message::MessageUsage::GetResp => panic!(),
             message::MessageUsage::GetReq => {
@@ -510,7 +510,7 @@ pub fn generate_rx_handlers(
 "
                 );
                 (logic, false)
-            }
+            },
             message::MessageUsage::SetResp => panic!(),
             message::MessageUsage::SetReq => {
                 let node_id = node_config.id();
@@ -813,8 +813,21 @@ pub fn generate_rx_handlers(
                 );
 
                 (logic, false)
-            }
-            message::MessageUsage::Heartbeat => ("".to_owned(), false),
+            },
+            message::MessageUsage::Heartbeat => {
+                let logic = format!(
+"
+{indent}if (msg.m_node_id < node_id_count) {{
+{indent2}heartbeat_wdg_job.job.wdg_job.static_wdg_armed[msg.m_node_id] = 1;
+{indent2}heartbeat_wdg_job.job.wdg_job.static_tick_counters[msg.m_node_id] = 0;
+{indent}}} else {{
+{indent2}heartbeat_wdg_job.job.wdg_job.dynamic_wdg_armed[msg.m_node_id - node_id_count] = 1;
+{indent2}heartbeat_wdg_job.job.wdg_job.dynamic_tick_counters[msg.m_node_id - node_id_count] = 0;
+{indent}}}
+"
+                );
+                (logic, false)
+            },
             message::MessageUsage::External { interval: _ } => ("".to_owned(), true),
         };
 

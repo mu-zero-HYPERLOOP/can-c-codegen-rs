@@ -516,7 +516,7 @@ pub fn generate_messages(
         };
 
         deserialize_def.push_str("}\n");
-        header.push_str(&deserialize_def);
+        source.push_str(&deserialize_def);
     }
 
     Ok(())
