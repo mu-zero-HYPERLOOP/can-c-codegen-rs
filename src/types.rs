@@ -5,6 +5,7 @@ use crate::messages::signal_type_to_c_type;
 use crate::options::Options;
 
 pub fn generate_types(
+    network_config: &config::NetworkRef,
     node_config: &config::NodeRef,
     header: &mut String,
     options: &Options,
@@ -40,6 +41,9 @@ pub fn generate_types(
                 let mut def = format!("typedef enum {{\n");
                 for (entry_name, entry_value) in entries {
                     def.push_str(&format!("{indent}{name}_{entry_name} = {entry_value},\n"));
+                }
+                if name == "node_id" {
+                    def.push_str(&format!("{indent}{name}_count = {}\n", network_config.nodes().len()));
                 }
                 def.push_str(&format!("}} {name};\n"));
                 header.push_str(&def);

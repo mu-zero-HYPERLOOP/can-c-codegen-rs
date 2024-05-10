@@ -16,6 +16,7 @@ pub fn generate_scheduler(network_config : &config::NetworkRef, node_config : &c
     let indent3 = format!("{indent2}{indent}");
     let indent4 = format!("{indent2}{indent2}");
     let indent5 = format!("{indent3}{indent2}");
+    let indent6 = format!("{indent3}{indent3}");
 
     let node_id = node_config.id();
     let mut command_resp_send_on_bus_cases = String::new();
@@ -123,7 +124,7 @@ typedef struct {{
 {indent}unsigned int static_tick_counters[node_id_count];
 {indent}unsigned int dynamic_wdg_armed[MAX_DYN_HEARTBEATS];
 {indent}unsigned int dynamic_tick_counters[MAX_DYN_HEARTBEATS];
-}} heartbeat_wdg_job;
+}} heartbeat_wdg_job_t;
 
 typedef struct {{
 {indent}uint32_t climax;
@@ -132,7 +133,7 @@ typedef struct {{
 {indent}union {{
 {indent2}get_resp_fragmentation_job get_fragmentation_job;
 {indent2}stream_interval_job stream_job;
-{indent2}heartbeat_wdg_job wdg_job;
+{indent2}heartbeat_wdg_job_t wdg_job;
   }} job;
 }} job_t;
 
@@ -285,79 +286,83 @@ static void schedule_jobs(uint32_t time) {{
 {indent3}return;
 {indent2}}}
 {indent2}switch (job->tag) {{
-{indent2}case STREAM_INTERVAL_JOB_TAG: {{
-{indent3}switch (job->job.stream_job.stream_id) {{
+{indent3}case STREAM_INTERVAL_JOB_TAG: {{
+{indent4}switch (job->job.stream_job.stream_id) {{
 {stream_case_logic}
-{indent3}default:
+{indent4}default:
+{indent5}{namespace}_exit_critical();
+{indent5}break;
+{indent4}}}
+{indent4}break;
+{indent3}}}
+{indent3}case HEARTBEAT_JOB_TAG: {{
+{indent4}scheduler_reschedule(time + heartbeat_interval);
+{indent4}{namespace}_exit_critical();
+{indent4}{namespace}_message_heartbeat heartbeat;
+{indent4}heartbeat.m_node_id = node_id_{node_name};
+{indent4}{namespace}_frame heartbeat_frame;
+{indent4}{namespace}_serialize_{namespace}_message_heartbeat(&heartbeat, &heartbeat_frame);
+{indent4}{namespace}_{heartbeat_bus_name}_send(&heartbeat_frame);
+{indent4}break;
+{indent3}}}
+{indent3}case HEARTBEAT_WDG_JOB_TAG: {{
+{indent4}scheduler_reschedule(time + heartbeat_wdg_tick_duration);
+{indent4}{namespace}_exit_critical();
+{indent4}for (unsigned int i = 0; i < node_id_count; ++i) {{
+{indent5}heartbeat_wdg_job.job.wdg_job.static_tick_counters[i] 
+{indent6}+= heartbeat_wdg_job.job.wdg_job.static_wdg_armed[i];
+{indent4}}}
+{indent4}for (unsigned int i = 0; i < MAX_DYN_HEARTBEATS; ++i) {{
+{indent5}heartbeat_wdg_job.job.wdg_job.dynamic_tick_counters[i] 
+{indent6}+= heartbeat_wdg_job.job.wdg_job.dynamic_wdg_armed[i];
+{indent4}}}
+{indent4}for (unsigned int i = 0; i < node_id_count; ++i) {{
+{indent5}if (heartbeat_wdg_job.job.wdg_job.static_tick_counters[i] >= 4) {{
+{indent6}{namespace}_wdg_timeout(i);
+{indent5}}}
+{indent4}}}
+{indent4}for (unsigned int i = 0; i < MAX_DYN_HEARTBEATS; ++i) {{
+{indent5}if (heartbeat_wdg_job.job.wdg_job.dynamic_tick_counters[i] >= 4) {{
+{indent6}{namespace}_wdg_timeout(node_id_count + i);
+{indent5}}}
+{indent4}}}
+{indent4}break;
+{indent3}}}
+{indent3}case GET_RESP_FRAGMENTATION_JOB_TAG: {{
+{indent4}get_resp_fragmentation_job *fragmentation_job = &job->job.get_fragmentation_job;
+{indent4}{namespace}_message_get_resp fragmentation_response;
+{indent4}fragmentation_response.m_header.m_sof = 0;
+{indent4}fragmentation_response.m_header.m_toggle = fragmentation_job->offset % 2;
+{indent4}fragmentation_response.m_header.m_od_index = fragmentation_job->od_index;
+{indent4}fragmentation_response.m_header.m_client_id = fragmentation_job->client_id;
+{indent4}fragmentation_response.m_header.m_server_id = 0x{node_id:X};
+{indent4}fragmentation_response.m_data = fragmentation_job->buffer[fragmentation_job->offset];
+{indent4}fragmentation_job->offset += 1;
+{indent4}if (fragmentation_job->offset == fragmentation_job->size) {{
+{indent5}fragmentation_response.m_header.m_eof = 1;
+{indent5}scheduler_unschedule();
+{indent4}}} else {{
+{indent5}fragmentation_response.m_header.m_eof = 0;
+{indent5}scheduler_reschedule(time + get_resp_fragmentation_interval);
+{indent4}}}
+{indent4}{namespace}_exit_critical();
+{indent4}canzero_frame fragmentation_frame;
+{indent4}{namespace}_serialize_{namespace}_message_get_resp(&fragmentation_response, &fragmentation_frame);
+{indent4}canzero_{get_resp_bus_name}_send(&fragmentation_frame);
+{indent4}break;
+{indent3}}}
+{indent3}default: {{
 {indent4}{namespace}_exit_critical();
 {indent4}break;
 {indent3}}}
-{indent3}break;
-{indent2}}}
-{indent2}case HEARTBEAT_JOB_TAG: {{
-{indent3}scheduler_reschedule(time + heartbeat_interval);
-{indent3}{namespace}_exit_critical();
-{indent3}{namespace}_message_heartbeat heartbeat;
-{indent3}heartbeat.m_node_id = node_id_{node_name};
-{indent3}{namespace}_frame heartbeat_frame;
-{indent3}{namespace}_serialize_{namespace}_message_heartbeat(&heartbeat, &heartbeat_frame);
-{indent3}{namespace}_{heartbeat_bus_name}_send(&heartbeat_frame);
-{indent3}break;
-{indent2}}}
-{indent2}case HEARTBEAT_WDG_JOB_TAG: {{
-{indent3}scheduler_reschedule(time + heartbeat_wdg_tick_duration);
-{indent3}{namespace}_exit_critical();
-{indent3}for (unsigned int i = 0; i < node_id_count; ++i) {{
-{indent4}heartbeat_wdg_job.job.wdg_job.static_tick_counters[i] 
-{indent5}+= heartbeat_wdg_job.job.wdg_job.static_wdg_armed[i];
-{indent3}}}
-{indent3}for (unsigned int i = 0; i < MAX_DYN_HEARTBEATS; ++i) {{
-{indent4}heartbeat_wdg_job.job.wdg_job.dynamic_tick_counters[i] 
-{indent5}+= heartbeat_wdg_job.job.wdg_job.dynamic_wdg_armed[i];
-{indent3}}}
-{indent3}for (unsigned int i = 0; i < node_id_count; ++i) {{
-{indent4}if (heartbeat_wdg_job.job.wdg_job.static_tick_counters[i] >= 4) {{
-{indent5}{namespace}_wdg_timeout(i);
-{indent4}}}
-{indent3}for (unsigned int i = 0; i < MAX_DYN_HEARTBEATS; ++i) {{
-{indent4}if (heartbeat_wdg_job.job.wdg_job.dynamic_tick_counters[i] >= 4) {{
-{indent5}{namespace}_wdg_timeout(node_id_count + i);
-{indent4}}}
-{indent3}}}
-{indent3}break;
-{indent2}}}
-{indent2}case GET_RESP_FRAGMENTATION_JOB_TAG: {{
-{indent3}get_resp_fragmentation_job *fragmentation_job = &job->job.get_fragmentation_job;
-{indent3}{namespace}_message_get_resp fragmentation_response;
-{indent3}fragmentation_response.m_header.m_sof = 0;
-{indent3}fragmentation_response.m_header.m_toggle = fragmentation_job->offset % 2;
-{indent3}fragmentation_response.m_header.m_od_index = fragmentation_job->od_index;
-{indent3}fragmentation_response.m_header.m_client_id = fragmentation_job->client_id;
-{indent3}fragmentation_response.m_header.m_server_id = 0x{node_id:X};
-{indent3}fragmentation_response.m_data = fragmentation_job->buffer[fragmentation_job->offset];
-{indent3}fragmentation_job->offset += 1;
-{indent3}if (fragmentation_job->offset == fragmentation_job->size) {{
-{indent4}fragmentation_response.m_header.m_eof = 1;
-{indent4}scheduler_unschedule();
-{indent3}}} else {{
-{indent4}fragmentation_response.m_header.m_eof = 0;
-{indent4}scheduler_reschedule(time + get_resp_fragmentation_interval);
-{indent3}}}
-{indent3}{namespace}_exit_critical();
-{indent3}canzero_frame fragmentation_frame;
-{indent3}{namespace}_serialize_{namespace}_message_get_resp(&fragmentation_response, &fragmentation_frame);
-{indent3}canzero_{get_resp_bus_name}_send(&fragmentation_frame);
-{indent3}break;
-{indent2}}}
-{indent2}default:
-{indent3}{namespace}_exit_critical();
-{indent3}break;
 {indent2}}}
 {indent}}}
 }}
-static uint32_t scheduler_next_job_timeout(){{
+
+static uint32_t scheduler_next_job_timeout() {{
 {indent}return scheduler.heap[0]->climax;
 }}
+
 "
 ));
 
