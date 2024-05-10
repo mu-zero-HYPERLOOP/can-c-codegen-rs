@@ -117,7 +117,7 @@ typedef struct {{
   uint32_t stream_id;
 }} stream_interval_job;
 
-#define MAX_DYN_HEARTBEATS
+#define MAX_DYN_HEARTBEATS 10
 typedef struct {{
 {indent}unsigned int static_wdg_armed[node_id_count];
 {indent}unsigned int static_tick_counters[node_id_count];
